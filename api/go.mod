@@ -1,8 +1,8 @@
 module pve-api
 
-go 1.19
+go 1.21
 
 require (
-    github.com/gorilla/mux v1.8.1
-    github.com/Telmate/proxmox-api-go v0.0.0-20230616182606-1087823a3dc7
+    github.com/gorilla/mux latest
+    github.com/Telmate/proxmox-api-go latest
 )
