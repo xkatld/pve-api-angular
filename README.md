@@ -16,7 +16,8 @@ nano ./pve-api/api/config.json
 ~~~
 运行启动后默认端口：8080
 ~~~
-go run ./pve-api/api/go.mod
+go mod ./pve-api/api/tidy
+go run ./pve-api/api/main.go
 ~~~
 # 使用教程
 API 示例：
