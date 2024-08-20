@@ -3,8 +3,10 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/gorilla/mux"
 	"github.com/Telmate/proxmox-api-go/proxmox"
@@ -12,18 +14,49 @@ import (
 
 var client *proxmox.Client
 
+// 配置结构体
+type Config struct {
+	ProxmoxURL string `json:"proxmox_url"`
+	Username   string `json:"username"`
+	Password   string `json:"password"`
+}
+
 func init() {
-	var err error
+	// 读取配置文件
+	config, err := loadConfig("config.json")
+	if err != nil {
+		log.Fatal("加载配置文件失败:", err)
+	}
+
 	// 初始化 Proxmox 客户端
-	client, err = proxmox.NewClient("https://你的proxmox服务器地址:8006/api2/json", nil, nil)
+	client, err = proxmox.NewClient(config.ProxmoxURL, nil, nil)
 	if err != nil {
 		log.Fatal("初始化 Proxmox 客户端失败:", err)
 	}
+
 	// 登录 Proxmox
-	err = client.Login("root@pam", "你的密码")
+	err = client.Login(config.Username, config.Password)
 	if err != nil {
 		log.Fatal("登录 Proxmox 失败:", err)
 	}
+}
+
+// 加载配置文件
+func loadConfig(filename string) (*Config, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	var config Config
+	decoder := json.NewDecoder(file)
+	err = decoder.Decode(&config)
+	if err != nil {
+		return nil, err
+	}
+
+	return &config, nil
 }
 
 func main() {
