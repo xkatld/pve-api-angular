@@ -1,186 +1,277 @@
 package main
 
 import (
-	"encoding/json"
-	"fmt"
-	"io/ioutil"
-	"log"
-	"net/http"
-	"os"
+    "bytes"
+    "crypto/tls"
+    "encoding/json"
+    "fmt"
+    "io/ioutil"
+    "log"
+    "net/http"
+    "net/url"
+    "strconv"
 
-	"github.com/gorilla/mux"
-	"github.com/Telmate/proxmox-api-go/proxmox"
+    "github.com/gorilla/mux"
 )
 
-var client *proxmox.Client
-
-// 配置结构体
+// Config structure
 type Config struct {
-	ProxmoxURL string `json:"proxmox_url"`
-	Username   string `json:"username"`
-	Password   string `json:"password"`
+    ProxmoxURL string `json:"proxmox_url"`
+    Username   string `json:"username"`
+    Password   string `json:"password"`
+    Node       string `json:"node"`
+    CSRFToken  string
 }
+
+var config Config
+var client *http.Client
+var ticket string
 
 func init() {
-	// 读取配置文件
-	config, err := loadConfig("config.json")
-	if err != nil {
-		log.Fatal("加载配置文件失败:", err)
-	}
+    loadConfig("config.json")
 
-	// 初始化 Proxmox 客户端
-	client, err = proxmox.NewClient(config.ProxmoxURL, nil, nil)
-	if err != nil {
-		log.Fatal("初始化 Proxmox 客户端失败:", err)
-	}
+    tr := &http.Transport{
+        TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+    }
+    client = &http.Client{Transport: tr}
 
-	// 登录 Proxmox
-	err = client.Login(config.Username, config.Password)
-	if err != nil {
-		log.Fatal("登录 Proxmox 失败:", err)
-	}
+    login()
 }
 
-// 加载配置文件
-func loadConfig(filename string) (*Config, error) {
-	file, err := os.Open(filename)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
+func loadConfig(filename string) {
+    data, err := ioutil.ReadFile(filename)
+    if err != nil {
+        log.Fatal("Failed to read config file:", err)
+    }
+    err = json.Unmarshal(data, &config)
+    if err != nil {
+        log.Fatal("Failed to parse config file:", err)
+    }
+    log.Printf("Loaded config: %+v", config)
+}
 
-	var config Config
-	decoder := json.NewDecoder(file)
-	err = decoder.Decode(&config)
-	if err != nil {
-		return nil, err
-	}
+func login() {
+    data := url.Values{}
+    data.Set("username", config.Username)
+    data.Set("password", config.Password)
 
-	return &config, nil
+    log.Printf("Attempting to login with username: %s", config.Username)
+    resp, err := client.PostForm(config.ProxmoxURL+"/api2/json/access/ticket", data)
+    if err != nil {
+        log.Fatal("Login failed:", err)
+    }
+    defer resp.Body.Close()
+
+    body, err := ioutil.ReadAll(resp.Body)
+    if err != nil {
+        log.Fatal("Failed to read login response:", err)
+    }
+    log.Printf("Login response: %s", string(body))
+
+    var result map[string]interface{}
+    err = json.Unmarshal(body, &result)
+    if err != nil {
+        log.Fatal("Failed to parse login response:", err)
+    }
+
+    if data, ok := result["data"].(map[string]interface{}); ok {
+        if ticketValue, ok := data["ticket"].(string); ok {
+            ticket = ticketValue
+            log.Printf("Login successful, got ticket: %s", ticket)
+        } else {
+            log.Fatal("Ticket not found in login response")
+        }
+        if csrfToken, ok := data["CSRFPreventionToken"].(string); ok {
+            config.CSRFToken = csrfToken
+            log.Printf("Got CSRF token: %s", config.CSRFToken)
+        } else {
+            log.Fatal("CSRF token not found in login response")
+        }
+    } else {
+        log.Fatal("Unexpected login response structure")
+    }
+}
+
+func apiRequest(method, path string, data map[string]interface{}) (map[string]interface{}, error) {
+    var req *http.Request
+    var err error
+
+    fullURL := config.ProxmoxURL + path
+    log.Printf("Preparing %s request to %s", method, fullURL)
+
+    if method == "GET" {
+        req, err = http.NewRequest(method, fullURL, nil)
+    } else {
+        jsonData, _ := json.Marshal(data)
+        req, err = http.NewRequest(method, fullURL, bytes.NewBuffer(jsonData))
+        req.Header.Set("Content-Type", "application/json")
+        log.Printf("Request body: %s", string(jsonData))
+    }
+
+    if err != nil {
+        log.Printf("Error creating request: %v", err)
+        return nil, err
+    }
+
+    req.Header.Set("Cookie", "PVEAuthCookie="+ticket)
+    req.Header.Set("CSRFPreventionToken", config.CSRFToken)
+    log.Printf("Request headers: %v", req.Header)
+
+    resp, err := client.Do(req)
+    if err != nil {
+        log.Printf("Error sending request: %v", err)
+        return nil, err
+    }
+    defer resp.Body.Close()
+
+    log.Printf("Response status: %s", resp.Status)
+
+    body, err := ioutil.ReadAll(resp.Body)
+    if err != nil {
+        log.Printf("Error reading response body: %v", err)
+        return nil, err
+    }
+
+    log.Printf("Response body: %s", string(body))
+
+    var result map[string]interface{}
+    err = json.Unmarshal(body, &result)
+    if err != nil {
+        log.Printf("Error parsing JSON response: %v", err)
+        return nil, err
+    }
+
+    return result, nil
 }
 
 func main() {
-	r := mux.NewRouter()
-	r.HandleFunc("/container/create", 创建容器).Methods("POST")
-	r.HandleFunc("/container/{id}/resources", 设置容器资源).Methods("POST")
-	r.HandleFunc("/container/{id}/network", 设置容器网络).Methods("POST")
+    r := mux.NewRouter()
+    r.HandleFunc("/container/create", createContainer).Methods("POST")
+    r.HandleFunc("/container/{id}/resources", setContainerResources).Methods("POST")
+    r.HandleFunc("/container/{id}/network", setContainerNetwork).Methods("POST")
 
-	log.Println("API 服务器正在运行，监听端口 8080...")
-	log.Fatal(http.ListenAndServe(":8080", r))
+    log.Println("API server is running on port 8080...")
+    log.Fatal(http.ListenAndServe(":8080", r))
 }
 
-func 创建容器(w http.ResponseWriter, r *http.Request) {
-	var 请求 struct {
-		节点     string `json:"node"`
-		存储节点 string `json:"storage"`
-		模板     string `json:"template"`
-		主机名   string `json:"hostname"`
-		内存     int    `json:"memory"`
-		CPU      int    `json:"cpu"`
-		硬盘     int    `json:"disk"`
-	}
+func createContainer(w http.ResponseWriter, r *http.Request) {
+    var request struct {
+        Storage  string `json:"storage"`
+        Template string `json:"template"`
+        Hostname string `json:"hostname"`
+        Memory   int    `json:"memory"`
+        CPU      int    `json:"cpu"`
+        Disk     int    `json:"disk"`
+    }
 
-	if err := json.NewDecoder(r.Body).Decode(&请求); err != nil {
-		http.Error(w, "解析请求体失败: "+err.Error(), http.StatusBadRequest)
-		return
-	}
+    if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+        http.Error(w, "Failed to parse request body: "+err.Error(), http.StatusBadRequest)
+        return
+    }
 
-	// 创建容器配置
-	config := map[string]interface{}{
-		"hostname":   请求.主机名,
-		"memory":     请求.内存,
-		"cores":      请求.CPU,
-		"storage":    请求.存储节点,
-		"ostemplate": fmt.Sprintf("local:vztmpl/%s", 请求.模板),
-		"rootfs":     fmt.Sprintf("%s:%d", 请求.存储节点, 请求.硬盘),
-	}
+    log.Printf("Received create container request: %+v", request)
 
-	// 创建容器
-	vmr := proxmox.NewVmRef(0)
-	vmr.SetNode(请求.节点)
-	if err := client.CreateLxc(vmr, config); err != nil {
-		http.Error(w, "创建容器失败: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
+    nextId, err := getNextId()
+    if err != nil {
+        http.Error(w, "Failed to get next available ID: "+err.Error(), http.StatusInternalServerError)
+        return
+    }
 
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"message": "容器创建成功",
-		"vmid":    vmr.VmId(),
-	})
+    data := map[string]interface{}{
+        "vmid":       nextId,
+        "hostname":   request.Hostname,
+        "cores":      request.CPU,
+        "memory":     request.Memory,
+        "ostemplate": fmt.Sprintf("local:vztmpl/%s", request.Template),
+        "storage":    request.Storage,
+        "rootfs":     fmt.Sprintf("%s:%d", request.Storage, request.Disk),
+    }
+
+    result, err := apiRequest("POST", "/api2/json/nodes/"+config.Node+"/lxc", data)
+    if err != nil {
+        http.Error(w, "Failed to create container: "+err.Error(), http.StatusInternalServerError)
+        return
+    }
+
+    w.WriteHeader(http.StatusOK)
+    json.NewEncoder(w).Encode(result)
 }
 
-func 设置容器资源(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id := vars["id"]
+func setContainerResources(w http.ResponseWriter, r *http.Request) {
+    vars := mux.Vars(r)
+    id := vars["id"]
 
-	var 资源 struct {
-		CPU  int `json:"cpu"`
-		内存 int `json:"memory"`
-		硬盘 int `json:"disk"`
-	}
+    var resources struct {
+        CPU    int `json:"cpu"`
+        Memory int `json:"memory"`
+        Disk   int `json:"disk"`
+    }
 
-	if err := json.NewDecoder(r.Body).Decode(&资源); err != nil {
-		http.Error(w, "解析请求体失败: "+err.Error(), http.StatusBadRequest)
-		return
-	}
+    if err := json.NewDecoder(r.Body).Decode(&resources); err != nil {
+        http.Error(w, "Failed to parse request body: "+err.Error(), http.StatusBadRequest)
+        return
+    }
 
-	// 设置 CPU 核心数
-	if _, err := client.SetVmConfig(id, map[string]interface{}{"cores": 资源.CPU}); err != nil {
-		http.Error(w, "设置 CPU 失败: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
+    log.Printf("Received set resources request for container %s: %+v", id, resources)
 
-	// 设置内存
-	if _, err := client.SetVmConfig(id, map[string]interface{}{"memory": 资源.内存}); err != nil {
-		http.Error(w, "设置内存失败: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
+    data := map[string]interface{}{
+        "cores":  resources.CPU,
+        "memory": resources.Memory,
+    }
 
-	// 设置硬盘大小
-	if _, err := client.ResizeVolume(id, "rootfs", fmt.Sprintf("%dG", 资源.硬盘)); err != nil {
-		http.Error(w, "设置硬盘失败: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
+    result, err := apiRequest("PUT", "/api2/json/nodes/"+config.Node+"/lxc/"+id+"/config", data)
+    if err != nil {
+        http.Error(w, "Failed to set resources: "+err.Error(), http.StatusInternalServerError)
+        return
+    }
 
-	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, "资源设置成功")
+    w.WriteHeader(http.StatusOK)
+    json.NewEncoder(w).Encode(result)
 }
 
-func 设置容器网络(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	id := vars["id"]
+func setContainerNetwork(w http.ResponseWriter, r *http.Request) {
+    vars := mux.Vars(r)
+    id := vars["id"]
 
-	var 网络 struct {
-		带宽    int `json:"bandwidth"`
-		SSH端口 int `json:"ssh_port"`
-		NAT开始 int `json:"nat_start"`
-		NAT结束 int `json:"nat_end"`
-	}
+    var network struct {
+        Bandwidth int `json:"bandwidth"`
+        SSHPort   int `json:"ssh_port"`
+        NATStart  int `json:"nat_start"`
+        NATEnd    int `json:"nat_end"`
+    }
 
-	if err := json.NewDecoder(r.Body).Decode(&网络); err != nil {
-		http.Error(w, "解析请求体失败: "+err.Error(), http.StatusBadRequest)
-		return
-	}
+    if err := json.NewDecoder(r.Body).Decode(&network); err != nil {
+        http.Error(w, "Failed to parse request body: "+err.Error(), http.StatusBadRequest)
+        return
+    }
 
-	// 设置网络带宽
-	if _, err := client.SetVmConfig(id, map[string]interface{}{
-		"net0": fmt.Sprintf("virtio,bridge=vmbr0,rate=%d", 网络.带宽),
-	}); err != nil {
-		http.Error(w, "设置网络带宽失败: "+err.Error(), http.StatusInternalServerError)
-		return
-	}
+    log.Printf("Received set network request for container %s: %+v", id, network)
 
-	/* 
-	设置 NAT 和端口转发
-	注意：这部分需要在 Proxmox 主机上执行额外的命令
-	以下是概念性的占位代码：
-	*/
-	ssh命令 := fmt.Sprintf("iptables -t nat -A PREROUTING -p tcp --dport %d -j DNAT --to-destination ${VM_IP}:22", 网络.SSH端口)
-	nat命令 := fmt.Sprintf("iptables -t nat -A PREROUTING -p tcp --dport %d:%d -j DNAT --to-destination ${VM_IP}", 网络.NAT开始, 网络.NAT结束)
+    data := map[string]interface{}{
+        "net0": fmt.Sprintf("name=eth0,bridge=vmbr0,rate=%d", network.Bandwidth),
+    }
 
-	// TODO: 需要实现在 Proxmox 主机上执行这些命令的功能
+    result, err := apiRequest("PUT", "/api2/json/nodes/"+config.Node+"/lxc/"+id+"/config", data)
+    if err != nil {
+        http.Error(w, "Failed to set network: "+err.Error(), http.StatusInternalServerError)
+        return
+    }
 
-	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, "网络设置应用成功")
+    w.WriteHeader(http.StatusOK)
+    json.NewEncoder(w).Encode(result)
+}
+
+func getNextId() (int, error) {
+    result, err := apiRequest("GET", "/api2/json/cluster/nextid", nil)
+    if err != nil {
+        return 0, err
+    }
+
+    nextId, err := strconv.Atoi(result["data"].(string))
+    if err != nil {
+        return 0, err
+    }
+
+    log.Printf("Got next available ID: %d", nextId)
+    return nextId, nil
 }
