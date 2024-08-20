@@ -19,52 +19,113 @@ nano ./pve-api/api/config.json
 cd ./pve-api/api/
 go mod tidy
 go run main.go
-~~~
+~~~/
+第一次运行会安装和创建数据库需要等待
 # 使用教程
 API 示例：
 
 以下是每个 API 端点的示例请求。你可以使用 curl 或任何 API 测试工具（如 Postman）来发送这些请求。
 
-创建容器：
+1. 创建容器
+```
+POST /container/create
+Content-Type: application/json
 
-~~~
-curl -X POST http://localhost:8080/container/create \
--H "Content-Type: application/json" \
--d '{
-  "node": "pve",
+{
   "storage": "local-lvm",
   "template": "ubuntu-20.04-standard_20.04-1_amd64.tar.gz",
-  "hostname": "my-container",
+  "hostname": "test-container",
   "memory": 512,
   "cpu": 1,
   "disk": 8
-}'
-~~~
-这将创建一个新的容器，并返回创建成功的消息和 VMID。
+}
+```
+curl 示例：
+```bash
+curl -X POST http://localhost:8080/container/create \
+  -H "Content-Type: application/json" \
+  -d '{
+    "storage": "local-lvm",
+    "template": "ubuntu-20.04-standard_20.04-1_amd64.tar.gz",
+    "hostname": "test-container",
+    "memory": 512,
+    "cpu": 1,
+    "disk": 8
+  }'
+```
 
-设置容器资源：
+2. 设置容器资源
+```
+POST /container/{id}/resources
+Content-Type: application/json
 
-~~~
-curl -X POST http://localhost:8080/container/100/resources \
--H "Content-Type: application/json" \
--d '{
+{
   "cpu": 2,
   "memory": 1024,
   "disk": 16
-}'
-~~~
-这将为 VMID 为 100 的容器设置 2 个 CPU 核心，1024MB 内存，和 16GB 硬盘。
+}
+```
+curl 示例：
+```bash
+curl -X POST http://localhost:8080/container/100/resources \
+  -H "Content-Type: application/json" \
+  -d '{
+    "cpu": 2,
+    "memory": 1024,
+    "disk": 16
+  }'
+```
 
-设置容器网络：
+3. 设置容器交换分区
+```
+POST /container/{id}/swap
+Content-Type: application/json
 
-~~~
-curl -X POST http://localhost:8080/container/100/network \
--H "Content-Type: application/json" \
--d '{
-  "bandwidth": 10,
-  "ssh_port": 1050,
-  "nat_start": 26300,
-  "nat_end": 26399
-}'
-~~~
-这将为 VMID 为 100 的容器设置 10Mbps 的带宽限制，SSH 端口为 1050，NAT 端口范围为 26300-26399。
+{
+  "size": 1024
+}
+```
+curl 示例：
+```bash
+curl -X POST http://localhost:8080/container/100/swap \
+  -H "Content-Type: application/json" \
+  -d '{
+    "size": 1024
+  }'
+```
+
+4. 启动容器
+```
+POST /container/{id}/start
+```
+curl 示例：
+```bash
+curl -X POST http://localhost:8080/container/100/start
+```
+
+5. 停止容器
+```
+POST /container/{id}/stop
+```
+curl 示例：
+```bash
+curl -X POST http://localhost:8080/container/100/stop
+```
+
+6. 重启容器
+```
+POST /container/{id}/restart
+```
+curl 示例：
+```bash
+curl -X POST http://localhost:8080/container/100/restart
+```
+
+7. 删除容器
+```
+DELETE /container/{id}/delete
+```
+curl 示例：
+```bash
+curl -X DELETE http://localhost:8080/container/100/delete
+```
