@@ -19,7 +19,7 @@ nano ./pve-api/api/config.json
 cd ./pve-api/api/
 go mod tidy
 go run main.go
-~~~/
+~~~
 第一次运行会安装和创建数据库需要等待
 # 使用教程
 API 示例：
