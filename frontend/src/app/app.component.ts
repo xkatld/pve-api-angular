@@ -1,5 +1,5 @@
 import { Component, OnInit, ViewChild } from '@angular/core';
-import { PveApiService, NodeInfo, ContainerConfig, ContainerInfo, ApiResponse, ResourcesInfo } from './pve-api.service';
+import { PveApiService, NodeInfo, ContainerConfig, ContainerInfo, ApiResponse, ResourcesInfo, ContainerConfigDetails } from './pve-api.service';
 import { NgForm } from '@angular/forms';
 import { finalize } from 'rxjs/operators';
 
@@ -42,10 +42,25 @@ export class AppComponent implements OnInit {
     nesting: false
   };
 
+  showDetailsModal: boolean = false;
+  isLoadingDetails: boolean = false;
+  selectedContainerDetails: ContainerInfo | null = null;
+  containerDetails: ContainerConfigDetails | null = null;
+  pveHost: string | null = null;
+
   constructor(private pveApi: PveApiService) {}
 
   ngOnInit() {
     this.loadNodes();
+    this.pveApi.getPveHost().subscribe({
+        next: (data) => {
+            this.pveHost = data.pve_host;
+        },
+        error: (err) => {
+            console.error("无法获取 PVE 主机地址:", err);
+            this.showMessage('无法获取 PVE 主机地址，控制台功能可能受限。', 'warning');
+        }
+    });
   }
 
   loadNodes() {
@@ -118,7 +133,6 @@ export class AppComponent implements OnInit {
       this.pveApi.getContainers(this.selectedNode).subscribe({
           next: (data) => {
               this.containers = data.map(c => ({ ...c, isLoading: false }));
-              //this.showMessage(`节点 '${this.selectedNode}' 上的容器加载成功!`, 'success');
               this.isLoadingContainers = false;
           },
           error: (err: Error) => {
@@ -183,12 +197,92 @@ export class AppComponent implements OnInit {
   }
 
   deleteContainer(container: ContainerInfo) {
-      if (confirm(`确定要删除容器 ${container.vmid} (${container.name}) 吗？此操作不可逆！`)) {
-          this.performAction(container, 'delete', this.pveApi.deleteContainer(container.node, container.vmid));
+      const confirmMessage = `您确定要删除容器 ${container.vmid} (${container.name}) 吗？\n\n此操作将首先尝试停止容器（如果正在运行），然后永久删除它。此操作不可逆！`;
+      if (confirm(confirmMessage)) {
+          container.isLoading = true;
+          this.actionType = 'delete';
+          this.message = null;
+
+          const performDelete = () => {
+              this.pveApi.deleteContainer(container.node, container.vmid).pipe(
+                  finalize(() => {
+                      container.isLoading = false;
+                      this.actionType = null;
+                      setTimeout(() => this.loadContainers(), 3000);
+                  })
+              ).subscribe({
+                  next: (response: ApiResponse) => {
+                      this.showMessage(`删除操作成功: ${response.message}`, 'success');
+                  },
+                  error: (err: Error) => {
+                      this.showMessage(`删除操作失败: ${err.message}`, 'danger');
+                  }
+              });
+          };
+
+          if (container.status === 'running') {
+              this.showMessage(`正在停止容器 ${container.vmid}...`, 'warning');
+              this.pveApi.stopContainer(container.node, container.vmid).subscribe({
+                  next: () => {
+                      this.showMessage(`容器 ${container.vmid} 已停止，正在删除...`, 'success');
+                      setTimeout(() => performDelete(), 2000);
+                  },
+                  error: (err: Error) => {
+                      this.showMessage(`停止容器失败: ${err.message}. 尝试直接删除...`, 'danger');
+                      performDelete();
+                  }
+              });
+          } else {
+              performDelete();
+          }
       }
   }
 
-  performAction(container: ContainerInfo, type: 'start' | 'stop' | 'delete', apiCall: any) {
+  reinstallContainer(container: ContainerInfo) {
+       const confirmMessage = `您确定要重装容器 ${container.vmid} (${container.name}) 吗？\n\n此操作将停止、删除现有容器，然后打开创建对话框以使用相似配置重建。\n\n您需要重新输入密码并确认设置。`;
+       if (confirm(confirmMessage)) {
+            container.isLoading = true;
+            this.actionType = 'delete';
+
+            const performDeleteForReinstall = () => {
+                this.pveApi.deleteContainer(container.node, container.vmid).subscribe({
+                    next: () => {
+                        this.showMessage(`容器 ${container.vmid} 已删除，请重新创建。`, 'success');
+                        container.isLoading = false;
+                        this.actionType = null;
+                        this.loadContainers();
+
+                        this.containerConfig.vmid = container.vmid;
+                        this.containerConfig.hostname = container.name;
+                        this.containerConfig.password = '';
+                        this.containerConfig.ostemplate = '';
+                        this.containerConfig.storage = '';
+                        this.selectedBridge = '';
+                        this.containerConfig.cores = 1;
+                        this.containerConfig.memory = 512;
+                        this.containerConfig.swap = 512;
+                        this.openCreateModal();
+                    },
+                    error: (err: Error) => {
+                        this.showMessage(`重装失败 (删除阶段): ${err.message}`, 'danger');
+                        container.isLoading = false;
+                        this.actionType = null;
+                    }
+                });
+            };
+
+            if (container.status === 'running') {
+                this.pveApi.stopContainer(container.node, container.vmid).subscribe({
+                    next: () => setTimeout(() => performDeleteForReinstall(), 2000),
+                    error: () => performDeleteForReinstall()
+                });
+            } else {
+                performDeleteForReinstall();
+            }
+       }
+  }
+
+  performAction(container: ContainerInfo, type: 'start' | 'stop', apiCall: any) {
       container.isLoading = true;
       this.actionType = type;
       this.message = null;
@@ -208,6 +302,39 @@ export class AppComponent implements OnInit {
       });
   }
 
+  showDetails(container: ContainerInfo) {
+      this.selectedContainerDetails = container;
+      this.containerDetails = null;
+      this.isLoadingDetails = true;
+      this.showDetailsModal = true;
+      this.pveApi.getContainerDetails(container.node, container.vmid).subscribe({
+          next: (data) => {
+              this.containerDetails = data;
+              this.isLoadingDetails = false;
+          },
+          error: (err: Error) => {
+              this.showMessage(`加载详情失败: ${err.message}`, 'danger');
+              this.isLoadingDetails = false;
+              this.closeDetailsModal();
+          }
+      });
+  }
+
+  closeDetailsModal() {
+      this.showDetailsModal = false;
+      this.selectedContainerDetails = null;
+      this.containerDetails = null;
+  }
+
+  openConsole(container: ContainerInfo) {
+      if (!this.pveHost) {
+          this.showMessage('PVE 主机地址未配置，无法打开控制台。', 'warning');
+          return;
+      }
+      const consoleUrl = `https://${this.pveHost}:8006/#v1:0:lxc/${container.vmid}:${container.node}:lxc::`;
+      window.open(consoleUrl, '_blank');
+      this.showMessage('正在新窗口中打开 PVE 控制台，您可能需要登录。', 'success');
+  }
 
   showMessage(msg: string, type: 'success' | 'danger' | 'warning') {
       this.message = msg;
