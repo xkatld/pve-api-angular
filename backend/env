@@ -1,0 +1,3 @@
+PVE_HOST=your_proxmox_host
+PVE_USER=your_user@pam
+PVE_PASSWORD=your_password
