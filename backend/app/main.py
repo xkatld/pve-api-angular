@@ -8,7 +8,8 @@ from proxmoxer import ProxmoxAPI
 from app.services.pve_service import (
     get_pve_api, list_nodes, create_container,
     list_lxc, start_lxc, stop_lxc, delete_lxc,
-    list_storages, list_templates, list_bridges
+    list_storages, list_templates, list_bridges,
+    get_lxc_config, get_pve_host
 )
 from app.core.config import settings
 import logging
@@ -112,6 +113,10 @@ class BridgeInfo(BaseModel):
     bridge_ports: Optional[str] = None
     ipaddr: Optional[str] = None
 
+@api_router.get("/config/pve_host", response_model=dict, tags=["Config"])
+def get_pve_host_route():
+    return {"pve_host": get_pve_host()}
+
 @api_router.get("/nodes",
                 summary="获取所有 PVE 节点列表",
                 response_model=List[NodeInfo],
@@ -159,6 +164,20 @@ def post_lxc_route(node_name: str, config: ContainerConfig, api: ProxmoxAPI = De
         if "already exists" in detail:
             raise HTTPException(status_code=409, detail=f"VMID {config.vmid} 可能已存在: {detail}")
         raise HTTPException(status_code=500, detail=f"创建容器时发生内部错误: {detail}")
+
+@api_router.get("/nodes/{node_name}/lxc/{vmid}/config",
+                summary="获取指定 LXC 容器的配置",
+                response_model=Any,
+                tags=["Containers"])
+def get_lxc_config_route(node_name: str = Path(..., description="Proxmox 节点名称"),
+                         vmid: int = Path(..., description="LXC 容器的 VMID"),
+                         api: ProxmoxAPI = Depends(get_api)):
+    try:
+        config = get_lxc_config(api, node_name, vmid)
+        return config
+    except Exception as e:
+        logger.error(f"获取容器 {vmid} 配置时出错: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"获取容器配置时发生内部错误: {e}")
 
 @api_router.post("/nodes/{node_name}/lxc/{vmid}/start",
                  summary="启动指定节点上的 LXC 容器",
