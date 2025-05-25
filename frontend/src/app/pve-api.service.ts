@@ -1,16 +1,16 @@
 import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { Observable, throwError } from 'rxjs';
+import { catchError } from 'rxjs/operators';
 
-// 定义接口 (可以单独放到 models.ts 文件)
 export interface NodeInfo {
   node: string;
   status: string;
   cpu: number;
   mem: number;
   maxmem: number;
-  disk: number;
-  maxdisk: number;
+  disk: number | null;
+  maxdisk: number | null;
   uptime: number;
 }
 
@@ -26,20 +26,40 @@ export interface ContainerConfig {
   swap?: number;
 }
 
+export interface ApiResponse {
+  message: string;
+  data: any;
+}
+
 @Injectable({
   providedIn: 'root'
 })
 export class PveApiService {
 
-  private apiUrl = 'http://localhost:8000/api'; // 指向你的 FastAPI 后端
+  private apiUrl = 'http://127.0.0.1:8000/api';
 
   constructor(private http: HttpClient) { }
 
-  getNodes(): Observable<NodeInfo[]> {
-    return this.http.get<NodeInfo[]>(`${this.apiUrl}/nodes`);
+  private handleError(error: HttpErrorResponse) {
+    let errorMessage = '发生未知错误!';
+    if (error.error instanceof ErrorEvent) {
+      errorMessage = `客户端错误: ${error.error.message}`;
+    } else {
+      errorMessage = `服务器错误 (代码: ${error.status}): ${error.error?.detail || error.message}`;
+    }
+    console.error(errorMessage);
+    return throwError(() => new Error(errorMessage));
   }
 
-  createLxc(nodeName: string, config: ContainerConfig): Observable<any> {
-    return this.http.post(`${this.apiUrl}/nodes/${nodeName}/lxc`, config);
+  getNodes(): Observable<NodeInfo[]> {
+    return this.http.get<NodeInfo[]>(`${this.apiUrl}/nodes`).pipe(
+      catchError(this.handleError)
+    );
+  }
+
+  createLxc(nodeName: string, config: ContainerConfig): Observable<ApiResponse> {
+    return this.http.post<ApiResponse>(`${this.apiUrl}/nodes/${nodeName}/lxc`, config).pipe(
+      catchError(this.handleError)
+    );
   }
 }
