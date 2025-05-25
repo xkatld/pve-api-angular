@@ -43,6 +43,32 @@ def create_container(api: ProxmoxAPI, node_name: str, config: dict):
         config['cores'] = int(config.get('cores', 1))
         config['memory'] = int(config.get('memory', 512))
         config['swap'] = int(config.get('swap', 512))
+        
+        cpulimit = int(config.get('cpulimit', 0))
+        rate = int(config.get('rate', 0))
+
+        if cpulimit > 0:
+            config['cpulimit'] = cpulimit
+        else:
+            config.pop('cpulimit', None)
+
+        if rate > 0:
+            config['rate'] = rate
+        else:
+            config.pop('rate', None)
+
+        config['unprivileged'] = 1 if config.get('unprivileged', True) else 0
+        
+        features = []
+        if config.get('nesting', False):
+            features.append("nesting=1")
+            
+        config.pop('nesting', None) 
+        
+        if features:
+            config['features'] = ",".join(features)
+        else:
+            config.pop('features', None)
 
         logger.info(f"正在节点 '{node_name}' 上创建容器，配置: {config}")
         result = api.nodes(node_name).lxc.post(**config)
@@ -83,4 +109,33 @@ def delete_lxc(api: ProxmoxAPI, node_name: str, vmid: int):
         return result
     except Exception as e:
         logger.error(f"删除 LXC 容器 {vmid} 失败: {e}")
+        raise
+
+def list_storages(api: ProxmoxAPI, node_name: str):
+    if not api: return None
+    try:
+        all_storages = api.nodes(node_name).storage.get()
+        template_storages = [s for s in all_storages if 'vztmpl' in s.get('content', '') and s.get('active', 0) == 1]
+        root_storages = [s for s in all_storages if ('rootdir' in s.get('content', '') or 'images' in s.get('content', '')) and s.get('active', 0) == 1]
+        return {"templates": template_storages, "root": root_storages}
+    except Exception as e:
+        logger.error(f"获取节点 '{node_name}' 上的存储列表失败: {e}")
+        raise
+
+def list_templates(api: ProxmoxAPI, node_name: str, storage_name: str):
+    if not api: return None
+    try:
+        return api.nodes(node_name).storage(storage_name).content.get(content='vztmpl')
+    except Exception as e:
+        logger.error(f"获取存储 '{storage_name}' 上的模板列表失败: {e}")
+        raise
+
+def list_bridges(api: ProxmoxAPI, node_name: str):
+    if not api: return None
+    try:
+        all_networks = api.nodes(node_name).network.get(type='bridge')
+        bridges = [n for n in all_networks if n.get('active') == 1]
+        return bridges
+    except Exception as e:
+        logger.error(f"获取节点 '{node_name}' 上的网桥列表失败: {e}")
         raise
