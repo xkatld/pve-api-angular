@@ -1,1 +1,25 @@
+h1, h2 {
+  border-bottom: 1px solid #eee;
+  padding-bottom: 10px;
+  margin-bottom: 20px;
+}
 
+form {
+  background-color: #f9f9f9;
+  padding: 25px;
+  border-radius: 8px;
+  border: 1px solid #e7e7e7;
+  margin-bottom: 30px;
+}
+
+.btn-primary {
+    margin-right: 10px;
+}
+
+.form-label {
+    font-weight: bold;
+}
+
+.alert {
+  transition: opacity 0.5s ease-in-out;
+}
