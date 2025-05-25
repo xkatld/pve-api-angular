@@ -1,11 +1,14 @@
-from fastapi import FastAPI, Depends, HTTPException, APIRouter, Header, Security
+from fastapi import FastAPI, Depends, HTTPException, APIRouter, Header, Security, Path
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel, Field
-from typing import List, Any
+from typing import List, Any, Optional
 from fastapi.middleware.cors import CORSMiddleware
 from proxmoxer import ProxmoxAPI
 
-from app.services.pve_service import get_pve_api, list_nodes, create_container
+from app.services.pve_service import (
+    get_pve_api, list_nodes, create_container,
+    list_lxc, start_lxc, stop_lxc, delete_lxc
+)
 from app.core.config import settings
 import logging
 
@@ -53,6 +56,19 @@ class NodeInfo(BaseModel):
     maxdisk: int | None = None
     uptime: int
 
+class ContainerInfo(BaseModel):
+    vmid: int
+    name: str
+    status: str
+    node: Optional[str] = None
+    cpu: float
+    mem: int
+    maxmem: int
+    disk: Optional[int] = None
+    maxdisk: Optional[int] = None
+    uptime: int
+    type: str
+
 class ContainerConfig(BaseModel):
     ostemplate: str = Field(..., description="模板路径，例如: local:vztmpl/ubuntu-22.04-standard_22.04-1_amd64.tar.gz")
     vmid: int = Field(..., gt=0, description="唯一的虚拟机 ID")
@@ -64,7 +80,7 @@ class ContainerConfig(BaseModel):
     memory: int = Field(512, gt=127, description="内存大小 (MB)")
     swap: int = Field(512, ge=0, description="SWAP 大小 (MB)")
 
-class CreateResponse(BaseModel):
+class ActionResponse(BaseModel):
     message: str
     data: Any
 
@@ -80,18 +96,31 @@ def get_nodes_route(api: ProxmoxAPI = Depends(get_api)):
         logger.error(f"获取节点时出错: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"获取节点列表时发生内部错误: {e}")
 
+@api_router.get("/nodes/{node_name}/lxc",
+                summary="获取指定节点上的 LXC 容器列表",
+                response_model=List[ContainerInfo],
+                tags=["Containers"])
+def get_lxc_route(node_name: str = Path(..., description="Proxmox 节点名称"),
+                  api: ProxmoxAPI = Depends(get_api)):
+    try:
+        containers = list_lxc(api, node_name)
+        # Add node_name to each container for frontend convenience
+        for c in containers:
+            c['node'] = node_name
+        return containers
+    except Exception as e:
+        logger.error(f"获取容器列表时出错 (节点: {node_name}): {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"获取容器列表时发生内部错误: {e}")
+
+
 @api_router.post("/nodes/{node_name}/lxc",
                  summary="在指定节点上创建 LXC 容器",
-                 response_model=CreateResponse,
+                 response_model=ActionResponse,
                  status_code=201,
                  tags=["Containers"])
 def post_lxc_route(node_name: str, config: ContainerConfig, api: ProxmoxAPI = Depends(get_api)):
     try:
-        try:
-            config_dict = config.model_dump()
-        except AttributeError:
-            config_dict = config.dict()
-
+        config_dict = config.model_dump()
         logger.info(f"接收到创建容器请求，节点: {node_name}, 配置: {config_dict}")
         result = create_container(api, node_name, config_dict)
         return {"message": "容器创建任务已成功启动", "data": result}
@@ -103,6 +132,49 @@ def post_lxc_route(node_name: str, config: ContainerConfig, api: ProxmoxAPI = De
         if "already exists" in detail:
             raise HTTPException(status_code=409, detail=f"VMID {config.vmid} 可能已存在: {detail}")
         raise HTTPException(status_code=500, detail=f"创建容器时发生内部错误: {detail}")
+
+@api_router.post("/nodes/{node_name}/lxc/{vmid}/start",
+                 summary="启动指定节点上的 LXC 容器",
+                 response_model=ActionResponse,
+                 tags=["Containers"])
+def start_lxc_route(node_name: str = Path(..., description="Proxmox 节点名称"),
+                    vmid: int = Path(..., description="LXC 容器的 VMID"),
+                    api: ProxmoxAPI = Depends(get_api)):
+    try:
+        result = start_lxc(api, node_name, vmid)
+        return {"message": f"启动容器 {vmid} 的任务已成功启动", "data": result}
+    except Exception as e:
+        logger.error(f"启动容器 {vmid} 时出错 (节点: {node_name}): {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"启动容器时发生内部错误: {e}")
+
+@api_router.post("/nodes/{node_name}/lxc/{vmid}/stop",
+                 summary="停止指定节点上的 LXC 容器",
+                 response_model=ActionResponse,
+                 tags=["Containers"])
+def stop_lxc_route(node_name: str = Path(..., description="Proxmox 节点名称"),
+                   vmid: int = Path(..., description="LXC 容器的 VMID"),
+                   api: ProxmoxAPI = Depends(get_api)):
+    try:
+        result = stop_lxc(api, node_name, vmid)
+        return {"message": f"停止容器 {vmid} 的任务已成功启动", "data": result}
+    except Exception as e:
+        logger.error(f"停止容器 {vmid} 时出错 (节点: {node_name}): {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"停止容器时发生内部错误: {e}")
+
+@api_router.delete("/nodes/{node_name}/lxc/{vmid}",
+                   summary="删除指定节点上的 LXC 容器",
+                   response_model=ActionResponse,
+                   tags=["Containers"])
+def delete_lxc_route(node_name: str = Path(..., description="Proxmox 节点名称"),
+                     vmid: int = Path(..., description="LXC 容器的 VMID"),
+                     api: ProxmoxAPI = Depends(get_api)):
+    try:
+        result = delete_lxc(api, node_name, vmid)
+        return {"message": f"删除容器 {vmid} 的任务已成功启动", "data": result}
+    except Exception as e:
+        logger.error(f"删除容器 {vmid} 时出错 (节点: {node_name}): {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"删除容器时发生内部错误: {e}")
+
 
 app.include_router(api_router)
 
