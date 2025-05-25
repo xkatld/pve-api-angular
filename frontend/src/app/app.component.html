@@ -1,1 +1,68 @@
+<div class="container mt-4">
+  <h1>Proxmox VE 管理 (Angular)</h1>
+  <hr>
 
+  <div *ngIf="message" class="alert alert-{{messageType}}">
+    {{ message }}
+  </div>
+
+  <h2>节点列表</h2>
+  <div class="mb-3">
+      <button class="btn btn-primary" (click)="loadNodes()">加载节点</button>
+  </div>
+
+  <div class="mb-4">
+      <label for="nodeSelect" class="form-label">选择节点:</label>
+      <select id="nodeSelect" class="form-select" [(ngModel)]="selectedNode" [disabled]="nodes.length === 0">
+          <option *ngIf="nodes.length === 0" value="">请先加载节点</option>
+          <option *ngFor="let node of nodes" [value]="node.node">
+              {{ node.node }} (CPU: {{ node.cpu.toFixed(2) }}, Mem: {{ (node.mem / node.maxmem * 100).toFixed(1) }}%)
+          </option>
+      </select>
+  </div>
+
+
+  <h2>创建 LXC 容器</h2>
+  <form #lxcForm="ngForm" (ngSubmit)="onSubmit()">
+      <div class="row g-3">
+          <div class="col-md-6">
+              <label for="vmid" class="form-label">VMID</label>
+              <input type="number" class="form-control" id="vmid" name="vmid" [(ngModel)]="containerConfig.vmid" required>
+          </div>
+          <div class="col-md-6">
+              <label for="hostname" class="form-label">主机名</label>
+              <input type="text" class="form-control" id="hostname" name="hostname" [(ngModel)]="containerConfig.hostname" required>
+          </div>
+          <div class="col-12">
+              <label for="ostemplate" class="form-label">系统模板</label>
+              <input type="text" class="form-control" id="ostemplate" name="ostemplate" [(ngModel)]="containerConfig.ostemplate" required>
+          </div>
+           <div class="col-md-6">
+              <label for="password" class="form-label">密码</label>
+              <input type="password" class="form-control" id="password" name="password" [(ngModel)]="containerConfig.password" required>
+          </div>
+           <div class="col-md-6">
+              <label for="storage" class="form-label">存储</label>
+              <input type="text" class="form-control" id="storage" name="storage" [(ngModel)]="containerConfig.storage" required>
+          </div>
+          <div class="col-12">
+              <label for="net0" class="form-label">网络 (net0)</label>
+              <input type="text" class="form-control" id="net0" name="net0" [(ngModel)]="containerConfig.net0" required>
+          </div>
+          <div class="col-md-4">
+              <label for="cores" class="form-label">CPU核心</label>
+              <input type="number" class="form-control" id="cores" name="cores" [(ngModel)]="containerConfig.cores">
+          </div>
+          <div class="col-md-4">
+              <label for="memory" class="form-label">内存 (MB)</label>
+              <input type="number" class="form-control" id="memory" name="memory" [(ngModel)]="containerConfig.memory">
+          </div>
+          <div class="col-md-4">
+              <label for="swap" class="form-label">SWAP (MB)</label>
+              <input type="number" class="form-control" id="swap" name="swap" [(ngModel)]="containerConfig.swap">
+          </div>
+      </div>
+      <button type="submit" class="btn btn-success mt-3" [disabled]="!lxcForm.form.valid || !selectedNode">创建容器</button>
+  </form>
+
+</div>
