@@ -1,10 +1,12 @@
-from fastapi import FastAPI, Depends, HTTPException, APIRouter
+from fastapi import FastAPI, Depends, HTTPException, APIRouter, Header, Security
+from fastapi.security import APIKeyHeader
 from pydantic import BaseModel, Field
 from typing import List, Any
 from fastapi.middleware.cors import CORSMiddleware
 from proxmoxer import ProxmoxAPI
 
 from app.services.pve_service import get_pve_api, list_nodes, create_container
+from app.core.config import settings
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -22,10 +24,21 @@ app.add_middleware(
     allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"],
+    allow_headers=["*", "X-API-Key"],
 )
 
-api_router = APIRouter(prefix="/api")
+API_KEY_NAME = "X-API-Key"
+api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=True)
+
+async def get_api_key(api_key: str = Security(api_key_header)):
+    if api_key == settings.api_key:
+        return api_key
+    else:
+        raise HTTPException(
+            status_code=403, detail="无法验证凭据"
+        )
+
+api_router = APIRouter(prefix="/api", dependencies=[Depends(get_api_key)])
 
 def get_api():
     api = get_pve_api()
