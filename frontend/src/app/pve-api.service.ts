@@ -15,6 +15,21 @@ export interface NodeInfo {
   uptime: number;
 }
 
+export interface ContainerInfo {
+  vmid: number;
+  name: string;
+  status: string;
+  node: string;
+  cpu: number;
+  mem: number;
+  maxmem: number;
+  disk: number | null;
+  maxdisk: number | null;
+  uptime: number;
+  type: string;
+  isLoading?: boolean; // 用于 UI 加载状态
+}
+
 export interface ContainerConfig {
   ostemplate: string;
   vmid: number;
@@ -66,9 +81,33 @@ export class PveApiService {
     );
   }
 
+  getContainers(nodeName: string): Observable<ContainerInfo[]> {
+    return this.http.get<ContainerInfo[]>(`${this.apiUrl}/nodes/${nodeName}/lxc`, { headers: this.getHeaders() }).pipe(
+      catchError(this.handleError)
+    );
+  }
+
   createLxc(nodeName: string, config: ContainerConfig): Observable<ApiResponse> {
     return this.http.post<ApiResponse>(`${this.apiUrl}/nodes/${nodeName}/lxc`, config, { headers: this.getHeaders() }).pipe(
       catchError(this.handleError)
     );
+  }
+
+  startContainer(nodeName: string, vmid: number): Observable<ApiResponse> {
+      return this.http.post<ApiResponse>(`${this.apiUrl}/nodes/${nodeName}/lxc/${vmid}/start`, {}, { headers: this.getHeaders() }).pipe(
+        catchError(this.handleError)
+      );
+  }
+
+  stopContainer(nodeName: string, vmid: number): Observable<ApiResponse> {
+      return this.http.post<ApiResponse>(`${this.apiUrl}/nodes/${nodeName}/lxc/${vmid}/stop`, {}, { headers: this.getHeaders() }).pipe(
+        catchError(this.handleError)
+      );
+  }
+
+  deleteContainer(nodeName: string, vmid: number): Observable<ApiResponse> {
+      return this.http.delete<ApiResponse>(`${this.apiUrl}/nodes/${nodeName}/lxc/${vmid}`, { headers: this.getHeaders() }).pipe(
+        catchError(this.handleError)
+      );
   }
 }
