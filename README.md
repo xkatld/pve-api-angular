@@ -22,6 +22,7 @@
 
 ```
 pve-api-angular/
+├── README.md
 ├── backend/
 │   ├── app/
 │   │   ├── core/
@@ -29,19 +30,23 @@ pve-api-angular/
 │   │   ├── services/
 │   │   │   └── pve_service.py
 │   │   └── main.py
-│   ├── .env
 │   └── requirements.txt
-├── frontend/
-│   ├── src/
-│   │   ├── app/
-│   │   ├── assets/
-│   │   ├── index.html
-│   │   ├── main.ts
-│   │   └── styles.css
-│   ├── angular.json
-│   ├── package.json
-│   └── tsconfig.json
-└── README.md
+└── frontend/
+    ├── angular.json
+    ├── package.json
+    ├── src/
+    │   ├── app/
+    │   │   ├── app.component.css
+    │   │   ├── app.component.html
+    │   │   ├── app.component.ts
+    │   │   ├── app.module.ts
+    │   │   └── pve-api.service.ts
+    │   ├── index.html
+    │   ├── main.ts
+    │   └── styles.css
+    ├── tsconfig.app.json
+    ├── tsconfig.json
+    └── tsconfig.spec.json
 ```
 
 ## 🚀 安装与设置
