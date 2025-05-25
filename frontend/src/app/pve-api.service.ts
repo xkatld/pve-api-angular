@@ -83,6 +83,10 @@ export interface ApiResponse {
   data: any;
 }
 
+export interface ContainerConfigDetails {
+  [key: string]: any;
+}
+
 @Injectable({
   providedIn: 'root'
 })
@@ -111,6 +115,12 @@ export class PveApiService {
     return throwError(() => new Error(errorMessage));
   }
 
+  getPveHost(): Observable<{ pve_host: string }> {
+    return this.http.get<{ pve_host: string }>(`${this.apiUrl}/config/pve_host`, { headers: this.getHeaders() }).pipe(
+      catchError(this.handleError)
+    );
+  }
+
   getNodes(): Observable<NodeInfo[]> {
     return this.http.get<NodeInfo[]>(`${this.apiUrl}/nodes`, { headers: this.getHeaders() }).pipe(
       catchError(this.handleError)
@@ -125,6 +135,12 @@ export class PveApiService {
 
   getResources(nodeName: string): Observable<ResourcesInfo> {
     return this.http.get<ResourcesInfo>(`${this.apiUrl}/nodes/${nodeName}/resources`, { headers: this.getHeaders() }).pipe(
+      catchError(this.handleError)
+    );
+  }
+
+  getContainerDetails(nodeName: string, vmid: number): Observable<ContainerConfigDetails> {
+    return this.http.get<ContainerConfigDetails>(`${this.apiUrl}/nodes/${nodeName}/lxc/${vmid}/config`, { headers: this.getHeaders() }).pipe(
       catchError(this.handleError)
     );
   }
