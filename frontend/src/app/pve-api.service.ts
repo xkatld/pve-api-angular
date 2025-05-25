@@ -27,7 +27,39 @@ export interface ContainerInfo {
   maxdisk: number | null;
   uptime: number;
   type: string;
-  isLoading?: boolean; // 用于 UI 加载状态
+  isLoading?: boolean;
+}
+
+export interface StorageInfo {
+  storage: string;
+  content: string;
+  type: string;
+  active: number;
+  avail: number;
+  total: number;
+  used: number;
+}
+
+export interface TemplateInfo {
+  volid: string;
+  size: number;
+  format: string;
+  content: string;
+}
+
+export interface BridgeInfo {
+  iface: string;
+  type: string;
+  active: number;
+}
+
+export interface ResourcesInfo {
+  storages: {
+      templates: StorageInfo[];
+      root: StorageInfo[];
+  };
+  bridges: BridgeInfo[];
+  templates: TemplateInfo[];
 }
 
 export interface ContainerConfig {
@@ -40,6 +72,10 @@ export interface ContainerConfig {
   cores?: number;
   memory?: number;
   swap?: number;
+  cpulimit?: number;
+  rate?: number;
+  unprivileged?: boolean;
+  nesting?: boolean;
 }
 
 export interface ApiResponse {
@@ -87,8 +123,19 @@ export class PveApiService {
     );
   }
 
+  getResources(nodeName: string): Observable<ResourcesInfo> {
+    return this.http.get<ResourcesInfo>(`${this.apiUrl}/nodes/${nodeName}/resources`, { headers: this.getHeaders() }).pipe(
+      catchError(this.handleError)
+    );
+  }
+
   createLxc(nodeName: string, config: ContainerConfig): Observable<ApiResponse> {
-    return this.http.post<ApiResponse>(`${this.apiUrl}/nodes/${nodeName}/lxc`, config, { headers: this.getHeaders() }).pipe(
+    const payload = {
+        ...config,
+        unprivileged: config.unprivileged ?? true,
+        nesting: config.nesting ?? false
+    };
+    return this.http.post<ApiResponse>(`${this.apiUrl}/nodes/${nodeName}/lxc`, payload, { headers: this.getHeaders() }).pipe(
       catchError(this.handleError)
     );
   }
