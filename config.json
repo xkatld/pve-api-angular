@@ -1,0 +1,8 @@
+{
+    "proxmox_url": "https://localhost:8006",
+    "username": "root@pam",
+    "password": "your_pve_password",
+    "node": "pve",
+    "gateway": "172.16.1.1",
+    "ipv6_gateway": "2001:db8:1::1"
+}
