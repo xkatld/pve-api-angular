@@ -70,19 +70,6 @@ source venv/bin/activate
 
 # 安装 Python 依赖
 pip install -r requirements.txt
-
-# 并填入你的 Proxmox VE 连接信息:(在 backend 目录下)
-# PVE_HOST=your_proxmox_host_ip_or_domain
-# PVE_USER=your_user@pam  # 例如 root@pam 或 myuser@pve
-# PVE_PASSWORD=your_password
-```
-
-**`.env` 文件示例:**
-
-```dotenv
-PVE_HOST=192.168.1.10
-PVE_USER=root@pam
-PVE_PASSWORD=YourSecretPassword!
 ```
 
 ### 3. 设置前端 (Angular)
@@ -94,6 +81,18 @@ cd frontend
 # 安装 Node.js 依赖
 npm install
 ```
+
+### 3. 设置安全文件
+
+```bash
+# 后端安全文件
+/backend/.env
+
+# 前端安全文件
+/frontend/src/environments
+```
+
+
 
 ## 💻 运行开发环境
 
