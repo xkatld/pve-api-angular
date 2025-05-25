@@ -16,7 +16,7 @@
     ```
 2.  **克隆项目:**
     ```bash
-    git clone [https://github.com/xkatld/pve-api.git](https://github.com/xkatld/pve-api.git)
+    git clone https://github.com/xkatld/pve-api.git
     ```
 3.  **配置 Proxmox VE 连接信息:**
     编辑 `config.json` 文件，填入你的 PVE URL、用户名、密码、节点名以及网关信息。
@@ -26,7 +26,7 @@
     示例 `config.json`:
     ```json
     {
-        "proxmox_url": "[https://192.168.1.100:8006](https://192.168.1.100:8006)",
+        "proxmox_url": "https://localhost:8006",
         "username": "root@pam",
         "password": "your_pve_password",
         "node": "pve",
