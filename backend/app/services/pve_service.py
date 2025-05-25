@@ -139,3 +139,14 @@ def list_bridges(api: ProxmoxAPI, node_name: str):
     except Exception as e:
         logger.error(f"获取节点 '{node_name}' 上的网桥列表失败: {e}")
         raise
+
+def get_lxc_config(api: ProxmoxAPI, node_name: str, vmid: int):
+    if not api: return None
+    try:
+        return api.nodes(node_name).lxc(vmid).config.get()
+    except Exception as e:
+        logger.error(f"获取 LXC 容器 {vmid} 配置失败: {e}")
+        raise
+
+def get_pve_host():
+    return settings.pve_host
