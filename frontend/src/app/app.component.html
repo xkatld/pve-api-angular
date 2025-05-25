@@ -203,7 +203,7 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" (click)="closeCreateModal()">取消</button>
-                <button type="submit" class="btn btn-success" (click)="onSubmit()" [disabled]="!lxcForm?.form.valid || !selectedNode || isCreating || !resources || isLoadingResources">
+                <button type="submit" class="btn btn-success" (click)="onSubmit()" [disabled]="(!lxcForm || !lxcForm.form || !lxcForm.form.valid) || !selectedNode || isCreating || !resources || isLoadingResources">
                     <span *ngIf="isCreating" class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
                     {{ isCreating ? '创建中...' : '创建容器' }}
                 </button>
