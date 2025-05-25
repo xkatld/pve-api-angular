@@ -1,131 +1,123 @@
-# pve-api
-Proxmox VE功能性api项目
-# 环境
-ProxmoxVE 8.2/go 1.19
-~~~
-apt update -y
-apt install git golang nano -y
-~~~
-# 安装教程
-~~~
-git clone https://github.com/xkatld/pve-api.git
-~~~
-拉库后修改./pve-api/api/config.json文件填入地址，用户，密码即可
-~~~
-nano ./pve-api/api/config.json
-~~~
-运行启动后默认端口：8080
-~~~
-cd ./pve-api/api/
-go mod tidy
-go run main.go
-~~~
-第一次运行会安装和创建数据库需要等待
-# 使用教程
-API 示例：
+# pve-api (重构版)
 
-以下是每个 API 端点的示例请求。你可以使用 curl 或任何 API 测试工具（如 Postman）来发送这些请求。
+一个用于管理 Proxmox VE 8 LXC 容器的功能性 API 项目。
 
-1. 创建容器
-```
-POST /container/create
-Content-Type: application/json
+## 环境
 
-{
-  "storage": "local-lvm",
-  "template": "ubuntu-20.04-standard_20.04-1_amd64.tar.gz",
-  "hostname": "test-container",
-  "memory": 512,
-  "cpu": 1,
-  "disk": 8
-}
-```
-curl 示例：
-```bash
-curl -X POST http://localhost:8080/container/create \
-  -H "Content-Type: application/json" \
-  -d '{
-    "storage": "local-lvm",
-    "template": "ubuntu-20.04-standard_20.04-1_amd64.tar.gz",
-    "hostname": "test-container",
-    "memory": 512,
-    "cpu": 1,
-    "disk": 8
-  }'
-```
+* Proxmox VE 8.x
+* Go 1.19+
 
-2. 设置容器资源
-```
-POST /container/{id}/resources
-Content-Type: application/json
+## 安装教程
 
-{
-  "cpu": 2,
-  "memory": 1024,
-  "disk": 16
-}
-```
-curl 示例：
-```bash
-curl -X POST http://localhost:8080/container/100/resources \
-  -H "Content-Type: application/json" \
-  -d '{
-    "cpu": 2,
-    "memory": 1024,
-    "disk": 16
-  }'
-```
+1.  **安装所需依赖 (如果尚未安装):**
+    ```bash
+    apt update -y
+    apt install git golang nano -y
+    ```
+2.  **克隆项目:**
+    ```bash
+    git clone [https://github.com/xkatld/pve-api.git](https://github.com/xkatld/pve-api.git)
+    ```
+3.  **配置 Proxmox VE 连接信息:**
+    编辑 `config.json` 文件，填入你的 PVE URL、用户名、密码、节点名以及网关信息。
+    ```bash
+    nano ./pve-api/api/config.json
+    ```
+    示例 `config.json`:
+    ```json
+    {
+        "proxmox_url": "[https://192.168.1.100:8006](https://192.168.1.100:8006)",
+        "username": "root@pam",
+        "password": "your_pve_password",
+        "node": "pve",
+        "gateway": "172.16.1.1",
+        "ipv6_gateway": "2001:db8:1::1"
+    }
+    ```
+4.  **运行 API 服务:**
+    进入 `api` 目录，下载依赖并运行。
+    ```bash
+    cd ./pve-api/api/
+    go mod tidy
+    go run main.go
+    ```
+    API 服务将默认在 `8080` 端口启动。
 
-3. 设置容器交换分区
-```
-POST /container/{id}/swap
-Content-Type: application/json
+## 使用教程
 
-{
-  "size": 1024
-}
-```
-curl 示例：
-```bash
-curl -X POST http://localhost:8080/container/100/swap \
-  -H "Content-Type: application/json" \
-  -d '{
-    "size": 1024
-  }'
-```
+API 运行后，你可以使用 `curl` 或其他工具与 API 交互。
 
-4. 启动容器
-```
-POST /container/{id}/start
-```
-curl 示例：
-```bash
-curl -X POST http://localhost:8080/container/100/start
-```
+**1. 创建容器**
 
-5. 停止容器
-```
-POST /container/{id}/stop
-```
-curl 示例：
-```bash
-curl -X POST http://localhost:8080/container/100/stop
-```
+* **请求:** `POST /container/create`
+* **示例:**
+    ```bash
+    curl -X POST http://localhost:8080/container/create \
+      -H "Content-Type: application/json" \
+      -d '{
+        "storage": "local-lvm",
+        "template": "ubuntu-22.04-standard_22.04-1_amd64.tar.gz",
+        "hostname": "my-new-container",
+        "memory": 1024,
+        "cpu": 1,
+        "disk": 10
+      }'
+    ```
 
-6. 重启容器
-```
-POST /container/{id}/restart
-```
-curl 示例：
-```bash
-curl -X POST http://localhost:8080/container/100/restart
-```
+**2. 设置容器资源**
 
-7. 删除容器
-```
-DELETE /container/{id}/delete
-```
-curl 示例：
-```bash
-curl -X DELETE http://localhost:8080/container/100/delete
-```
+* **请求:** `POST /container/{id}/resources`
+* **示例 (设置 ID 为 101 的容器):**
+    ```bash
+    curl -X POST http://localhost:8080/container/101/resources \
+      -H "Content-Type: application/json" \
+      -d '{
+        "cpu": 2,
+        "memory": 2048,
+        "disk": 20
+      }'
+    ```
+
+**3. 设置容器交换分区**
+
+* **请求:** `POST /container/{id}/swap`
+* **示例 (设置 ID 为 101 的容器):**
+    ```bash
+    curl -X POST http://localhost:8080/container/101/swap \
+      -H "Content-Type: application/json" \
+      -d '{
+        "size": 512
+      }'
+    ```
+
+**4. 启动容器**
+
+* **请求:** `POST /container/{id}/start`
+* **示例 (启动 ID 为 101 的容器):**
+    ```bash
+    curl -X POST http://localhost:8080/container/101/start
+    ```
+
+**5. 停止容器**
+
+* **请求:** `POST /container/{id}/stop`
+* **示例 (停止 ID 为 101 的容器):**
+    ```bash
+    curl -X POST http://localhost:8080/container/101/stop
+    ```
+
+**6. 重启容器**
+
+* **请求:** `POST /container/{id}/restart`
+* **示例 (重启 ID 为 101 的容器):**
+    ```bash
+    curl -X POST http://localhost:8080/container/101/restart
+    ```
+
+**7. 删除容器**
+
+* **请求:** `DELETE /container/{id}/delete`
+* **示例 (删除 ID 为 101 的容器):**
+    ```bash
+    curl -X DELETE http://localhost:8080/container/101/delete
+    ```
