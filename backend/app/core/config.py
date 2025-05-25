@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     pve_password: str = os.getenv("PVE_PASSWORD", "your_password")
     verify_ssl: bool = False
     api_key: str = os.getenv("API_KEY", "a_very_secret_api_key_12345")
+    cors_origins: str = os.getenv("CORS_ORIGINS", "http://localhost:4200")
 
     class Config:
         env_file = ".env"
