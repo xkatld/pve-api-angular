@@ -1,6 +1,7 @@
 # PVE Manager - Proxmox VE 网页管理界面 (FastAPI + Angular)
 
 这是一个全栈项目，旨在提供一个现代化的 Web 用户界面，用于管理 [Proxmox VE 8.x](https://www.proxmox.com/en/proxmox-ve) 环境。
+
 它利用 Python FastAPI 提供后端 API 服务，并使用 Angular 构建前端用户界面，当前主要聚焦于查看 PVE 节点和创建 LXC 容器。
 
 ## ✨ 主要功能
