@@ -28,6 +28,14 @@ def list_nodes(api: ProxmoxAPI):
         logger.error(f"获取节点列表失败: {e}")
         raise
 
+def list_lxc(api: ProxmoxAPI, node_name: str):
+    if not api: return None
+    try:
+        return api.nodes(node_name).lxc.get()
+    except Exception as e:
+        logger.error(f"获取节点 '{node_name}' 上的 LXC 列表失败: {e}")
+        raise
+
 def create_container(api: ProxmoxAPI, node_name: str, config: dict):
     if not api: return None
     try:
@@ -42,4 +50,37 @@ def create_container(api: ProxmoxAPI, node_name: str, config: dict):
         return result
     except Exception as e:
         logger.error(f"创建 LXC 容器失败: {e}")
+        raise
+
+def start_lxc(api: ProxmoxAPI, node_name: str, vmid: int):
+    if not api: return None
+    try:
+        logger.info(f"正在启动节点 '{node_name}' 上的容器 VMID: {vmid}")
+        result = api.nodes(node_name).lxc(vmid).status.start.post()
+        logger.info(f"启动容器 {vmid} 任务已启动: {result}")
+        return result
+    except Exception as e:
+        logger.error(f"启动 LXC 容器 {vmid} 失败: {e}")
+        raise
+
+def stop_lxc(api: ProxmoxAPI, node_name: str, vmid: int):
+    if not api: return None
+    try:
+        logger.info(f"正在停止节点 '{node_name}' 上的容器 VMID: {vmid}")
+        result = api.nodes(node_name).lxc(vmid).status.stop.post()
+        logger.info(f"停止容器 {vmid} 任务已启动: {result}")
+        return result
+    except Exception as e:
+        logger.error(f"停止 LXC 容器 {vmid} 失败: {e}")
+        raise
+
+def delete_lxc(api: ProxmoxAPI, node_name: str, vmid: int):
+    if not api: return None
+    try:
+        logger.info(f"正在删除节点 '{node_name}' 上的容器 VMID: {vmid}")
+        result = api.nodes(node_name).lxc(vmid).delete()
+        logger.info(f"删除容器 {vmid} 任务已启动: {result}")
+        return result
+    except Exception as e:
+        logger.error(f"删除 LXC 容器 {vmid} 失败: {e}")
         raise
