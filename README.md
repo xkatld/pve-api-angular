@@ -1,101 +1,108 @@
-# PVE API - Proxmox VE 管理后端
+# PVE Manager - Proxmox VE 管理 (FastAPI + Angular)
 
-这是一个基于 Python `FastAPI` 构建的后端 API 项目，旨在提供一个便捷的接口来管理 [Proxmox VE 8.x](https://www.proxmox.com/en/proxmox-ve) 环境中的资源，特别是 LXC 容器。
+这是一个全栈项目，旨在提供一个现代化的 Web 界面来管理 [Proxmox VE 8.x](https://www.proxmox.com/en/proxmox-ve) 环境中的资源，特别是 LXC 容器。它由一个 Python `FastAPI` 后端和一个 `Angular` 前端组成。
 
 ## ✨ 功能特性
 
-* **现代 Web 框架**: 使用 `FastAPI` 构建，提供高性能和自动 API 文档。
-* **Proxmox VE 集成**: 通过 `proxmoxer` 库与 Proxmox VE API 进行交互。
-* **核心功能**:
-    * 获取 PVE 节点列表。
-    * 在指定节点上创建 LXC 容器。
-* **配置灵活**: 使用 `.env` 文件和 `pydantic-settings` 管理 PVE 连接信息。
-* **结构清晰**: 模块化的项目结构，易于扩展和维护。
+* **后端 (FastAPI)**:
+    * 提供高性能的 RESTful API 接口。
+    * 通过 `proxmoxer` 库与 Proxmox VE API 进行交互。
+    * 核心功能：获取 PVE 节点列表、创建 LXC 容器等。
+    * 使用 `.env` 文件和 `pydantic-settings` 管理 PVE 连接信息。
+    * 提供自动 API 文档 (Swagger UI / ReDoc)。
+* **前端 (Angular)**:
+    * 使用现代 Angular 框架构建，提供动态、响应式的用户界面。
+    * 通过 HTTP 服务与后端 API 通信。
+    * 提供节点查看和 LXC 容器创建表单。
+    * 易于扩展以支持更多 PVE 管理功能。
 
 ## ⚙️ 环境要求
 
 * Proxmox VE 8.x
 * Python 3.10+
+* Node.js 16+ (建议 18 或更高版本)
+* Angular CLI
+
+## 🏗️ 项目结构
+
+```
+pve-api-angular/
+├── backend/            # FastAPI 后端代码
+│   ├── app/
+│   └── requirements.txt
+├── frontend/           # Angular 前端代码
+│   ├── src/
+│   └── package.json
+└── README.md           # 你正在阅读的文件
+```
 
 ## 🚀 快速开始
 
 ### 1. 克隆项目
 
 ```bash
-git clone https://github.com/xkatld/pve-api
-cd pve-api
+git clone <你的项目仓库地址>
+cd pve-api-angular
 ```
 
-### 2. 安装依赖
-
-建议在虚拟环境中进行安装：
+### 2. 设置后端
 
 ```bash
+cd backend
+
+# (建议) 创建并激活 Python 虚拟环境
+# python -m venv venv
+# source venv/bin/activate # 或者 .\venv\Scripts\activate (Windows)
+
+# 安装依赖
 pip install -r requirements.txt
+
+# 创建 .env 文件 (在 backend 目录下)
+cp .env.example .env # 如果你有 .env.example，否则手动创建
+
+# 编辑 .env 文件并填入你的 PVE 信息:
+# PVE_HOST=your_proxmox_host_ip_or_domain
+# PVE_USER=your_user@pam
+# PVE_PASSWORD=your_password
 ```
 
-### 3. 配置环境
-
-在项目根目录下创建一个名为 `.env` 的文件，并填入你的 Proxmox VE 连接信息：
-
-```dotenv
-PVE_HOST=your_proxmox_host_ip_or_domain
-PVE_USER=your_user@pam  # 或 @pve 等认证域
-PVE_PASSWORD=your_password
-```
-
-## 运行应用
-
-使用 `uvicorn` 启动 FastAPI 应用：
+### 3. 设置前端
 
 ```bash
-uvicorn app.main:app --host 0.0.0.0 --reload
+cd ../frontend
+
+# 安装依赖
+npm install
 ```
 
-## 📚 API 文档与使用
+## 💻 运行开发环境
 
-启动应用后，你可以通过浏览器访问以下地址查看自动生成的 API 文档：
+你需要**同时运行**后端和前端两个服务。请打开**两个终端**窗口：
+
+**终端 1: 启动后端 (FastAPI)**
+
+```bash
+cd backend
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+后端 API 将在 `http://0.0.0.0:8000` 启动。
+
+**终端 2: 启动前端 (Angular)**
+
+```bash
+cd frontend
+ng serve --open
+```
+
+Angular 开发服务器将启动，并自动在浏览器中打开 `http://localhost:4200`。前端应用将通过该地址访问后端 API。
+
+## 📚 API 文档
+
+当后端服务运行时，你可以通过浏览器访问以下地址查看自动生成的 API 文档：
 
 * **Swagger UI**: `http://127.0.0.1:8000/docs`
 * **ReDoc**: `http://127.0.0.1:8000/redoc`
-
-### 当前可用端点：
-
-* `GET /nodes`: 获取所有 PVE 节点的信息。
-* `POST /nodes/{node_name}/lxc`: 在指定的 `node_name` 节点上创建一个新的 LXC 容器。
-
-**创建容器示例 (`POST /nodes/pve/lxc`) 请求体:**
-
-```json
-{
-  "ostemplate": "local:vztmpl/ubuntu-22.04-standard_22.04-1_amd64.tar.gz",
-  "vmid": 101,
-  "hostname": "my-new-container",
-  "password": "secure_password",
-  "net0": "name=eth0,bridge=vmbr0,ip=dhcp",
-  "storage": "local-lvm",
-  "cores": 1,
-  "memory": 512,
-  "swap": 512
-}
-```
-
-## 🏗️ 项目结构
-
-```
-pve-api/
-├── app/
-│   ├── __init__.py
-│   ├── main.py         # FastAPI 应用、路由定义
-│   ├── core/
-│   │   ├── __init__.py
-│   │   └── config.py   # 配置加载
-│   └── services/
-│       ├── __init__.py
-│       └── pve_service.py  # PVE 连接与服务逻辑
-├── .env                # 环境变量 (需手动创建)
-└── requirements.txt    # Python 依赖
-```
 
 ## 🤝 贡献
 
