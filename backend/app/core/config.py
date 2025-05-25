@@ -5,9 +5,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 class Settings(BaseSettings):
-    pve_host: str = os.getenv("PVE_HOST")
-    pve_user: str = os.getenv("PVE_USER")
-    pve_password: str = os.getenv("PVE_PASSWORD")
+    pve_host: str = os.getenv("PVE_HOST", "your_proxmox_host_ip_or_domain")
+    pve_user: str = os.getenv("PVE_USER", "your_user@pam")
+    pve_password: str = os.getenv("PVE_PASSWORD", "your_password")
     verify_ssl: bool = False
 
     class Config:
