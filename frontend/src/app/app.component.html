@@ -100,7 +100,12 @@
                 <button type="button" class="btn-close" (click)="closeCreateModal()" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <form #lxcForm="ngForm" (ngSubmit)="onSubmit()">
+                 <div *ngIf="isLoadingResources" class="text-center">
+                    <div class="spinner-border text-primary" role="status">
+                      <span class="visually-hidden">加载资源中...</span>
+                    </div>
+                 </div>
+                <form #lxcForm="ngForm" (ngSubmit)="onSubmit()" *ngIf="!isLoadingResources && resources">
                   <div class="row g-3">
                       <div class="col-md-6">
                           <div class="mb-3">
@@ -123,21 +128,32 @@
                           </div>
                            <div class="mb-3">
                               <label for="ostemplate" class="form-label">系统模板 <span class="text-danger">*</span></label>
-                              <input type="text" class="form-control" id="ostemplate" name="ostemplate" [(ngModel)]="containerConfig.ostemplate" required placeholder="例如: local:vztmpl/ubuntu-22.04..." #ostemplate="ngModel">
-                               <div *ngIf="ostemplate.invalid && (ostemplate.dirty || ostemplate.touched)" class="invalid-feedback d-block">系统模板是必填项。</div>
+                              <select class="form-select" id="ostemplate" name="ostemplate" [(ngModel)]="containerConfig.ostemplate" required #ostemplate="ngModel">
+                                   <option *ngIf="!resources?.templates || resources?.templates.length === 0" value="" disabled>没有可用的模板</option>
+                                   <option *ngFor="let tpl of resources?.templates" [value]="tpl.volid">{{ tpl.volid.split('/')[1] }} ({{ tpl.size / (1024*1024*1024) | number:'1.1-2' }} GB)</option>
+                              </select>
+                               <div *ngIf="ostemplate.invalid && (ostemplate.dirty || ostemplate.touched)" class="invalid-feedback d-block">请选择一个系统模板。</div>
+                          </div>
+                           <div class="mb-3">
+                              <label for="storage" class="form-label">根磁盘存储 <span class="text-danger">*</span></label>
+                              <select class="form-select" id="storage" name="storage" [(ngModel)]="containerConfig.storage" required #storage="ngModel">
+                                   <option *ngIf="!resources?.storages?.root || resources?.storages?.root.length === 0" value="" disabled>没有可用的根存储</option>
+                                   <option *ngFor="let st of resources?.storages?.root" [value]="st.storage">{{ st.storage }} ({{ st.type }})</option>
+                              </select>
+                               <div *ngIf="storage.invalid && (storage.dirty || storage.touched)" class="invalid-feedback d-block">请选择一个存储。</div>
                           </div>
                       </div>
                       <div class="col-md-6">
-                          <div class="mb-3">
-                              <label for="storage" class="form-label">存储 <span class="text-danger">*</span></label>
-                              <input type="text" class="form-control" id="storage" name="storage" [(ngModel)]="containerConfig.storage" required placeholder="例如: local-lvm" #storage="ngModel">
-                               <div *ngIf="storage.invalid && (storage.dirty || storage.touched)" class="invalid-feedback d-block">存储是必填项。</div>
-                          </div>
-                          <div class="mb-3">
-                              <label for="net0" class="form-label">网络 (net0) <span class="text-danger">*</span></label>
-                              <input type="text" class="form-control" id="net0" name="net0" [(ngModel)]="containerConfig.net0" required placeholder="例如: name=eth0,bridge=vmbr0,ip=dhcp" #net0="ngModel">
-                               <div *ngIf="net0.invalid && (net0.dirty || net0.touched)" class="invalid-feedback d-block">网络配置是必填项。</div>
-                          </div>
+                           <div class="mb-3">
+                                <label for="bridge" class="form-label">网络 (网桥) <span class="text-danger">*</span></label>
+                                <select class="form-select" id="bridge" name="bridge" [(ngModel)]="selectedBridge" required #bridge="ngModel" (ngModelChange)="updateNet0()">
+                                     <option *ngIf="!resources?.bridges || resources?.bridges.length === 0" value="" disabled>没有可用的网桥</option>
+                                     <option *ngFor="let br of resources?.bridges" [value]="br.iface">{{ br.iface }}</option>
+                                </select>
+                                <input type="hidden" name="net0" [(ngModel)]="containerConfig.net0">
+                                <div *ngIf="bridge.invalid && (bridge.dirty || bridge.touched)" class="invalid-feedback d-block">请选择一个网桥。</div>
+                                <div class="form-text">当前网络配置: {{ containerConfig.net0 }}</div>
+                           </div>
                           <div class="row">
                               <div class="col-md-4">
                                   <label for="cores" class="form-label">CPU核心</label>
@@ -152,13 +168,42 @@
                                   <input type="number" class="form-control" id="swap" name="swap" [(ngModel)]="containerConfig.swap" min="0">
                               </div>
                           </div>
+                           <div class="row mt-3">
+                                <div class="col-md-6">
+                                  <label for="cpulimit" class="form-label">CPU 限制</label>
+                                  <input type="number" class="form-control" id="cpulimit" name="cpulimit" [(ngModel)]="containerConfig.cpulimit" min="0">
+                                  <div class="form-text">0 = 无限制</div>
+                                </div>
+                                <div class="col-md-6">
+                                  <label for="rate" class="form-label">带宽限制 (MB/s)</label>
+                                  <input type="number" class="form-control" id="rate" name="rate" [(ngModel)]="containerConfig.rate" min="0">
+                                  <div class="form-text">0 = 无限制</div>
+                                </div>
+                           </div>
+                           <div class="row mt-3">
+                                <div class="col-md-6">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" role="switch" id="unprivileged" name="unprivileged" [(ngModel)]="containerConfig.unprivileged">
+                                        <label class="form-check-label" for="unprivileged">非特权容器</label>
+                                    </div>
+                                </div>
+                                 <div class="col-md-6">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" role="switch" id="nesting" name="nesting" [(ngModel)]="containerConfig.nesting">
+                                        <label class="form-check-label" for="nesting">开启嵌套</label>
+                                    </div>
+                                </div>
+                           </div>
                       </div>
                   </div>
                 </form>
+                 <div *ngIf="!isLoadingResources && !resources" class="alert alert-warning">
+                    无法加载创建容器所需的资源信息，请检查节点选择或后端连接。
+                 </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" (click)="closeCreateModal()">取消</button>
-                <button type="submit" class="btn btn-success" (click)="onSubmit()" [disabled]="!lxcForm.form.valid || !selectedNode || isCreating">
+                <button type="submit" class="btn btn-success" (click)="onSubmit()" [disabled]="!lxcForm.form.valid || !selectedNode || isCreating || !resources || isLoadingResources">
                     <span *ngIf="isCreating" class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
                     {{ isCreating ? '创建中...' : '创建容器' }}
                 </button>
