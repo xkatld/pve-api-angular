@@ -1,27 +1,20 @@
-# PVE Manager - Proxmox VE 管理 (FastAPI + Angular)
+# PVE Manager - Proxmox VE 网页管理界面 (FastAPI + Angular)
 
-这是一个全栈项目，旨在提供一个现代化的 Web 界面来管理 [Proxmox VE 8.x](https://www.proxmox.com/en/proxmox-ve) 环境中的资源，特别是 LXC 容器。它由一个 Python `FastAPI` 后端和一个 `Angular` 前端组成。
+这是一个全栈项目，旨在提供一个现代化的 Web 用户界面，用于管理 [Proxmox VE 8.x](https://www.proxmox.com/en/proxmox-ve) 环境。它利用 Python FastAPI 提供后端 API 服务，并使用 Angular 构建前端用户界面，当前主要聚焦于查看 PVE 节点和创建 LXC 容器。
 
-## ✨ 功能特性
+## ✨ 主要功能
 
 * **后端 (FastAPI)**:
-    * 提供高性能的 RESTful API 接口。
-    * 通过 `proxmoxer` 库与 Proxmox VE API 进行交互。
-    * 核心功能：获取 PVE 节点列表、创建 LXC 容器等。
-    * 使用 `.env` 文件和 `pydantic-settings` 管理 PVE 连接信息。
-    * 提供自动 API 文档 (Swagger UI / ReDoc)。
+    * 通过 `proxmoxer` 库与 Proxmox VE API 安全交互。
 * **前端 (Angular)**:
-    * 使用现代 Angular 框架构建，提供动态、响应式的用户界面。
-    * 通过 HTTP 服务与后端 API 通信。
-    * 提供节点查看和 LXC 容器创建表单。
-    * 易于扩展以支持更多 PVE 管理功能。
+    * 现代化的单页应用 (SPA) 界面。
+    * 使用 Bootstrap 5 进行样式设计。
 
 ## ⚙️ 环境要求
 
 * Proxmox VE 8.x
 * Python 3.10+
-* Node.js 16+ (建议 18 或更高版本)
-* Angular CLI
+* Node.js 16+
 
 ## 🏗️ 项目结构
 
@@ -39,54 +32,59 @@ pve-api-angular/
 ├── frontend/
 │   ├── src/
 │   │   ├── app/
-│   │   │   ├── app.component.css
-│   │   │   ├── app.component.html
-│   │   │   ├── app.component.ts
-│   │   │   ├── app.module.ts
-│   │   │   └── pve-api.service.ts
+│   │   ├── assets/
 │   │   ├── index.html
-│   │   └── main.ts
+│   │   ├── main.ts
+│   │   └── styles.css
 │   ├── angular.json
-│   └── package.json
+│   ├── package.json
+│   └── tsconfig.json
 └── README.md
 ```
 
-## 🚀 快速开始
+## 🚀 安装与设置
 
 ### 1. 克隆项目
 
 ```bash
-git clone <你的项目仓库地址>
+git clone https://github.com/xkatld/pve-api-angular
 cd pve-api-angular
 ```
 
-### 2. 设置后端
+### 2. 设置后端 (FastAPI)
 
 ```bash
+# 进入后端目录
 cd backend
 
-# (建议) 创建并激活 Python 虚拟环境
-# python -m venv venv
-# source venv/bin/activate # 或者 .\venv\Scripts\activate (Windows)
+# (强烈建议) 创建并激活 Python 虚拟环境
+python -m venv venv
+source venv/bin/activate
 
-# 安装依赖
+# 安装 Python 依赖
 pip install -r requirements.txt
 
-# 创建 .env 文件 (在 backend 目录下)
-cp .env.example .env # 如果你有 .env.example，否则手动创建
-
-# 编辑 .env 文件并填入你的 PVE 信息:
+# 并填入你的 Proxmox VE 连接信息:(在 backend 目录下)
 # PVE_HOST=your_proxmox_host_ip_or_domain
-# PVE_USER=your_user@pam
+# PVE_USER=your_user@pam  # 例如 root@pam 或 myuser@pve
 # PVE_PASSWORD=your_password
 ```
 
-### 3. 设置前端
+**`.env` 文件示例:**
+
+```dotenv
+PVE_HOST=192.168.1.10
+PVE_USER=root@pam
+PVE_PASSWORD=YourSecretPassword!
+```
+
+### 3. 设置前端 (Angular)
 
 ```bash
-cd ../frontend
+# 返回项目根目录，然后进入前端目录
+cd frontend
 
-# 安装依赖
+# 安装 Node.js 依赖
 npm install
 ```
 
@@ -98,19 +96,22 @@ npm install
 
 ```bash
 cd backend
+source venv/bin/activate
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-后端 API 将在 `http://0.0.0.0:8000` 启动。
+后端 API 将在 `http://0.0.0.0:8000` 启动。`--reload` 会在代码更改时自动重启。
 
 **终端 2: 启动前端 (Angular)**
 
 ```bash
 cd frontend
-ng serve --open
+
+# 运行 ng serve 并监听 0.0.0.0 以便从其他机器访问
+npm start -- --host 0.0.0.0
 ```
 
-Angular 开发服务器将启动，并自动在浏览器中打开 `http://localhost:4200`。前端应用将通过该地址访问后端 API。
+Angular 开发服务器将启动，并监听 `http://0.0.0.0:4200`。
 
 ## 📚 API 文档
 
@@ -118,7 +119,3 @@ Angular 开发服务器将启动，并自动在浏览器中打开 `http://localh
 
 * **Swagger UI**: `http://127.0.0.1:8000/docs`
 * **ReDoc**: `http://127.0.0.1:8000/redoc`
-
-## 🤝 贡献
-
-欢迎提交 Pull Requests 或 Issues 来改进这个项目。
