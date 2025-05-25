@@ -14,10 +14,7 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Proxmox VE API Backend")
 
-origins = [
-    "http://localhost:4200",
-    "http://127.0.0.1:4200",
-]
+origins = [origin.strip() for origin in settings.cors_origins.split(',')]
 
 app.add_middleware(
     CORSMiddleware,
