@@ -27,13 +27,25 @@
 
 ```
 pve-api-angular/
-├── backend/            # FastAPI 后端代码
-│   ├── app/
-│   └── requirements.txt
-├── frontend/           # Angular 前端代码
+├── backend/            # 简化的 FastAPI 后端代码
+│   ├── main.py         # 主应用和 API 路由
+│   ├── config.py       # PVE 连接配置
+│   ├── pve_service.py  # Proxmox VE 交互服务
+│   ├── .env            # 环境变量文件 (保持不变)
+│   └── requirements.txt# Python 依赖 (保持不变)
+├── frontend/           # Angular 前端代码 (保持不变)
 │   ├── src/
+│   │   ├── app/
+│   │   │   ├── app.component.css
+│   │   │   ├── app.component.html
+│   │   │   ├── app.component.ts
+│   │   │   ├── app.module.ts
+│   │   │   └── pve-api.service.ts
+│   │   ├── index.html
+│   │   └── main.ts
+│   ├── angular.json
 │   └── package.json
-└── README.md           # 你正在阅读的文件
+└── README.md           # 项目说明 (需要更新启动命令)
 ```
 
 ## 🚀 快速开始
