@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     pve_user: str = os.getenv("PVE_USER", "your_user@pam")
     pve_password: str = os.getenv("PVE_PASSWORD", "your_password")
     verify_ssl: bool = False
+    api_key: str = os.getenv("API_KEY", "a_very_secret_api_key_12345")
 
     class Config:
         env_file = ".env"
