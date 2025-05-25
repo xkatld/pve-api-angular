@@ -44,15 +44,13 @@ PVE_USER=your_user@pam  # 或 @pve 等认证域
 PVE_PASSWORD=your_password
 ```
 
-### 4. 运行应用
+## 运行应用
 
 使用 `uvicorn` 启动 FastAPI 应用：
 
 ```bash
-uvicorn app.main:app --reload
+uvicorn app.main:app --host 0.0.0.0 --reload
 ```
-
-应用将在 `http://127.0.0.1:8000` 启动。
 
 ## 📚 API 文档与使用
 
