@@ -1,5 +1,5 @@
 import { Component, OnInit, ViewChild } from '@angular/core';
-import { PveApiService, NodeInfo, ContainerConfig, ContainerInfo, ApiResponse } from './pve-api.service';
+import { PveApiService, NodeInfo, ContainerConfig, ContainerInfo, ApiResponse, ResourcesInfo } from './pve-api.service';
 import { NgForm } from '@angular/forms';
 import { finalize } from 'rxjs/operators';
 
@@ -21,18 +21,25 @@ export class AppComponent implements OnInit {
   isCreating: boolean = false;
   showCreateModal: boolean = false;
   actionType: 'start' | 'stop' | 'delete' | null = null;
+  isLoadingResources: boolean = false;
 
+  resources: ResourcesInfo | null = null;
+  selectedBridge: string = '';
 
   containerConfig: ContainerConfig = {
-    ostemplate: 'local:vztmpl/ubuntu-22.04-standard_22.04-1_amd64.tar.gz',
+    ostemplate: '',
     vmid: 105,
     hostname: 'my-lxc-105',
     password: '',
-    net0: 'name=eth0,bridge=vmbr0,ip=dhcp',
-    storage: 'local-lvm',
+    net0: '',
+    storage: '',
     cores: 1,
     memory: 512,
-    swap: 512
+    swap: 512,
+    cpulimit: 0,
+    rate: 0,
+    unprivileged: true,
+    nesting: false
   };
 
   constructor(private pveApi: PveApiService) {}
@@ -49,12 +56,15 @@ export class AppComponent implements OnInit {
         this.nodes = data;
         if (data.length > 0 && !this.selectedNode) {
             this.selectedNode = data[0].node;
+            this.loadResources();
             this.loadContainers();
         } else if (data.length > 0) {
-            this.loadContainers(); // 刷新时也加载
+            this.loadResources();
+            this.loadContainers();
         } else {
             this.showMessage('未找到 PVE 节点。', 'warning');
             this.containers = [];
+            this.resources = null;
         }
         this.isLoadingNodes = false;
       },
@@ -66,8 +76,37 @@ export class AppComponent implements OnInit {
     });
   }
 
+  loadResources() {
+      if (!this.selectedNode) return;
+      this.isLoadingResources = true;
+      this.pveApi.getResources(this.selectedNode).subscribe({
+          next: (data) => {
+              this.resources = data;
+              if (this.resources?.storages?.root.length > 0 && !this.containerConfig.storage) {
+                  this.containerConfig.storage = this.resources.storages.root[0].storage;
+              }
+              if (this.resources?.templates.length > 0 && !this.containerConfig.ostemplate) {
+                  this.containerConfig.ostemplate = this.resources.templates[0].volid;
+              }
+              if (this.resources?.bridges.length > 0 && !this.selectedBridge) {
+                  this.selectedBridge = this.resources.bridges[0].iface;
+                  this.updateNet0();
+              }
+              this.isLoadingResources = false;
+          },
+          error: (err: Error) => {
+              console.error(err);
+              this.showMessage(`加载资源失败: ${err.message}`, 'danger');
+              this.isLoadingResources = false;
+          }
+      });
+  }
+
   onNodeChange(node: string) {
       this.selectedNode = node;
+      this.resources = null;
+      this.containers = [];
+      this.loadResources();
       this.loadContainers();
   }
 
@@ -75,11 +114,11 @@ export class AppComponent implements OnInit {
       if (!this.selectedNode) return;
       this.isLoadingContainers = true;
       this.message = null;
-      this.containers = []; // 清空现有列表
+      this.containers = [];
       this.pveApi.getContainers(this.selectedNode).subscribe({
           next: (data) => {
               this.containers = data.map(c => ({ ...c, isLoading: false }));
-              this.showMessage(`节点 '${this.selectedNode}' 上的容器加载成功!`, 'success');
+              //this.showMessage(`节点 '${this.selectedNode}' 上的容器加载成功!`, 'success');
               this.isLoadingContainers = false;
           },
           error: (err: Error) => {
@@ -90,27 +129,42 @@ export class AppComponent implements OnInit {
       });
   }
 
+  updateNet0() {
+      this.containerConfig.net0 = `name=eth0,bridge=${this.selectedBridge},ip=dhcp`;
+  }
+
   onSubmit() {
-    if (!this.selectedNode) {
-      this.showMessage('请选择一个节点!', 'warning');
+    if (!this.selectedNode || !this.resources) {
+      this.showMessage('请选择一个节点并等待资源加载!', 'warning');
       return;
     }
-    if (this.lxcForm.invalid) {
-        this.showMessage('请填写所有必填字段!', 'warning');
+     if (this.lxcForm.invalid || !this.containerConfig.ostemplate || !this.containerConfig.storage || !this.containerConfig.net0) {
+        this.showMessage('请填写所有必填字段并选择资源!', 'warning');
+        Object.keys(this.lxcForm.controls).forEach(field => {
+            const control = this.lxcForm.controls[field];
+            control.markAsTouched({ onlySelf: true });
+        });
         return;
     }
 
     this.isCreating = true;
     this.message = null;
-    this.pveApi.createLxc(this.selectedNode, this.containerConfig).subscribe({
+
+    const configToSend = {
+        ...this.containerConfig,
+        cpulimit: Number(this.containerConfig.cpulimit),
+        rate: Number(this.containerConfig.rate)
+    };
+
+    this.pveApi.createLxc(this.selectedNode, configToSend).subscribe({
       next: (response: ApiResponse) => {
         this.showMessage(`容器创建任务启动成功: ${response.data || response.message}`, 'success');
         this.isCreating = false;
         this.closeCreateModal();
-        this.containerConfig.vmid++; // 自动增加 vmid
+        this.containerConfig.vmid++;
         this.containerConfig.hostname = `my-lxc-${this.containerConfig.vmid}`;
-        this.containerConfig.password = ''; // 清空密码
-        setTimeout(() => this.loadContainers(), 2000); // 等待一会再刷新列表
+        this.containerConfig.password = '';
+        setTimeout(() => this.loadContainers(), 3000);
       },
       error: (err: Error) => {
         console.error(err);
@@ -142,7 +196,6 @@ export class AppComponent implements OnInit {
           finalize(() => {
               container.isLoading = false;
               this.actionType = null;
-              // 稍后刷新列表以获取最新状态
               setTimeout(() => this.loadContainers(), 3000);
           })
       ).subscribe({
@@ -159,10 +212,13 @@ export class AppComponent implements OnInit {
   showMessage(msg: string, type: 'success' | 'danger' | 'warning') {
       this.message = msg;
       this.messageType = type;
-      setTimeout(() => this.message = null, 7000); // 延长显示时间
+      setTimeout(() => this.message = null, 7000);
   }
 
   openCreateModal() {
+      if (!this.resources && this.selectedNode) {
+          this.loadResources();
+      }
       this.showCreateModal = true;
   }
 
