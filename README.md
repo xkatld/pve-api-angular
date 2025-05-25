@@ -1,4 +1,4 @@
-# pve-api (重构版)
+# pve-api
 
 一个用于管理 Proxmox VE 8 LXC 容器的功能性 API 项目。
 
