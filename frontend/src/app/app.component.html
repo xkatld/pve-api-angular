@@ -129,16 +129,16 @@
                            <div class="mb-3">
                               <label for="ostemplate" class="form-label">系统模板 <span class="text-danger">*</span></label>
                               <select class="form-select" id="ostemplate" name="ostemplate" [(ngModel)]="containerConfig.ostemplate" required #ostemplate="ngModel">
-                                   <option *ngIf="!resources?.templates || resources?.templates.length === 0" value="" disabled>没有可用的模板</option>
-                                   <option *ngFor="let tpl of resources?.templates" [value]="tpl.volid">{{ tpl.volid.split('/')[1] }} ({{ tpl.size / (1024*1024*1024) | number:'1.1-2' }} GB)</option>
+                                   <option *ngIf="!resources!.templates || resources!.templates.length === 0" value="" disabled>没有可用的模板</option>
+                                   <option *ngFor="let tpl of resources!.templates" [value]="tpl.volid">{{ tpl.volid.split('/')[1] }} ({{ tpl.size / (1024*1024*1024) | number:'1.1-2' }} GB)</option>
                               </select>
                                <div *ngIf="ostemplate.invalid && (ostemplate.dirty || ostemplate.touched)" class="invalid-feedback d-block">请选择一个系统模板。</div>
                           </div>
                            <div class="mb-3">
                               <label for="storage" class="form-label">根磁盘存储 <span class="text-danger">*</span></label>
                               <select class="form-select" id="storage" name="storage" [(ngModel)]="containerConfig.storage" required #storage="ngModel">
-                                   <option *ngIf="!resources?.storages?.root || resources?.storages?.root.length === 0" value="" disabled>没有可用的根存储</option>
-                                   <option *ngFor="let st of resources?.storages?.root" [value]="st.storage">{{ st.storage }} ({{ st.type }})</option>
+                                   <option *ngIf="!resources!.storages.root || resources!.storages.root.length === 0" value="" disabled>没有可用的根存储</option>
+                                   <option *ngFor="let st of resources!.storages.root" [value]="st.storage">{{ st.storage }} ({{ st.type }})</option>
                               </select>
                                <div *ngIf="storage.invalid && (storage.dirty || storage.touched)" class="invalid-feedback d-block">请选择一个存储。</div>
                           </div>
@@ -147,8 +147,8 @@
                            <div class="mb-3">
                                 <label for="bridge" class="form-label">网络 (网桥) <span class="text-danger">*</span></label>
                                 <select class="form-select" id="bridge" name="bridge" [(ngModel)]="selectedBridge" required #bridge="ngModel" (ngModelChange)="updateNet0()">
-                                     <option *ngIf="!resources?.bridges || resources?.bridges.length === 0" value="" disabled>没有可用的网桥</option>
-                                     <option *ngFor="let br of resources?.bridges" [value]="br.iface">{{ br.iface }}</option>
+                                     <option *ngIf="!resources!.bridges || resources!.bridges.length === 0" value="" disabled>没有可用的网桥</option>
+                                     <option *ngFor="let br of resources!.bridges" [value]="br.iface">{{ br.iface }}</option>
                                 </select>
                                 <input type="hidden" name="net0" [(ngModel)]="containerConfig.net0">
                                 <div *ngIf="bridge.invalid && (bridge.dirty || bridge.touched)" class="invalid-feedback d-block">请选择一个网桥。</div>
@@ -203,7 +203,7 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" (click)="closeCreateModal()">取消</button>
-                <button type="submit" class="btn btn-success" (click)="onSubmit()" [disabled]="!lxcForm.form.valid || !selectedNode || isCreating || !resources || isLoadingResources">
+                <button type="submit" class="btn btn-success" (click)="onSubmit()" [disabled]="!lxcForm?.form.valid || !selectedNode || isCreating || !resources || isLoadingResources">
                     <span *ngIf="isCreating" class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
                     {{ isCreating ? '创建中...' : '创建容器' }}
                 </button>
