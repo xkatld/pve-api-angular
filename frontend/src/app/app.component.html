@@ -38,7 +38,7 @@
                   <th>状态</th>
                   <th>CPU</th>
                   <th>内存</th>
-                  <th>操作</th>
+                  <th style="min-width: 200px;">操作</th>
               </tr>
           </thead>
           <tbody>
@@ -65,16 +65,25 @@
                   <td>{{ container.cpu * 100 | number:'1.1-1' }}%</td>
                   <td>{{ container.mem / (1024*1024) | number:'1.0-0' }} MB / {{ container.maxmem / (1024*1024) | number:'1.0-0' }} MB</td>
                   <td>
-                      <div class="btn-group" role="group">
-                          <button class="btn btn-sm btn-outline-success" (click)="startContainer(container)" [disabled]="container.status === 'running' || container.isLoading">
+                      <div class="btn-group btn-group-sm" role="group">
+                          <button class="btn btn-outline-success" (click)="startContainer(container)" [disabled]="container.status === 'running' || container.isLoading">
                               <span *ngIf="container.isLoading && actionType === 'start'" class="spinner-border spinner-border-sm"></span>
                               <i *ngIf="!(container.isLoading && actionType === 'start')" class="bi bi-play-fill"></i>
                           </button>
-                           <button class="btn btn-sm btn-outline-warning" (click)="stopContainer(container)" [disabled]="container.status === 'stopped' || container.isLoading">
+                           <button class="btn btn-outline-warning" (click)="stopContainer(container)" [disabled]="container.status === 'stopped' || container.isLoading">
                                <span *ngIf="container.isLoading && actionType === 'stop'" class="spinner-border spinner-border-sm"></span>
                                <i *ngIf="!(container.isLoading && actionType === 'stop')" class="bi bi-stop-fill"></i>
                           </button>
-                          <button class="btn btn-sm btn-outline-danger" (click)="deleteContainer(container)" [disabled]="container.isLoading">
+                          <button class="btn btn-outline-info" (click)="showDetails(container)" [disabled]="container.isLoading">
+                              <i class="bi bi-info-circle"></i>
+                          </button>
+                          <button class="btn btn-outline-secondary" (click)="openConsole(container)" [disabled]="container.isLoading || !pveHost">
+                              <i class="bi bi-terminal"></i>
+                          </button>
+                          <button class="btn btn-outline-primary" (click)="reinstallContainer(container)" [disabled]="container.isLoading">
+                                <i class="bi bi-arrow-repeat"></i>
+                          </button>
+                          <button class="btn btn-outline-danger" (click)="deleteContainer(container)" [disabled]="container.isLoading">
                               <span *ngIf="container.isLoading && actionType === 'delete'" class="spinner-border spinner-border-sm"></span>
                               <i *ngIf="!(container.isLoading && actionType === 'delete')" class="bi bi-trash-fill"></i>
                           </button>
@@ -88,9 +97,7 @@
            刷新列表
       </button>
   </div>
-
 </div>
-
 
 <div class="modal fade" [ngClass]="{'show d-block': showCreateModal}" tabindex="-1" role="dialog">
     <div class="modal-dialog modal-lg" role="document">
@@ -212,3 +219,29 @@
     </div>
 </div>
 <div class="modal-backdrop fade" [ngClass]="{'show': showCreateModal}" *ngIf="showCreateModal"></div>
+
+<div class="modal fade" [ngClass]="{'show d-block': showDetailsModal && selectedContainerDetails}" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">容器详情: {{ selectedContainerDetails?.name }} ({{ selectedContainerDetails?.vmid }})</h5>
+                <button type="button" class="btn-close" (click)="closeDetailsModal()" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div *ngIf="isLoadingDetails" class="text-center">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">加载详情中...</span>
+                    </div>
+                </div>
+                <pre *ngIf="!isLoadingDetails && containerDetails"><code class="language-json">{{ containerDetails | json }}</code></pre>
+                 <div *ngIf="!isLoadingDetails && !containerDetails" class="alert alert-warning">
+                    无法加载容器详情。
+                 </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" (click)="closeDetailsModal()">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="modal-backdrop fade" [ngClass]="{'show': showDetailsModal}" *ngIf="showDetailsModal"></div>
