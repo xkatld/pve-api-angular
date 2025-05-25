@@ -7,84 +7,163 @@
     <button type="button" class="btn-close" (click)="message = null" aria-label="Close"></button>
   </div>
 
-  <h2>节点列表</h2>
+  <h2>节点与容器列表</h2>
   <div class="mb-3 d-flex align-items-center">
-      <button class="btn btn-primary" (click)="loadNodes()" [disabled]="isLoadingNodes">
+      <button class="btn btn-primary me-3" (click)="loadNodes()" [disabled]="isLoadingNodes">
           <span *ngIf="isLoadingNodes" class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
           {{ isLoadingNodes ? '加载中...' : '刷新节点' }}
       </button>
-      <div *ngIf="nodes.length > 0" class="ms-3">
+      <div *ngIf="nodes.length > 0" class="me-3">
           <label for="nodeSelect" class="form-label me-2">选择节点:</label>
-          <select id="nodeSelect" class="form-select d-inline-block w-auto" [(ngModel)]="selectedNode" [disabled]="nodes.length === 0">
+          <select id="nodeSelect" class="form-select d-inline-block w-auto" [(ngModel)]="selectedNode" (ngModelChange)="onNodeChange($event)" [disabled]="nodes.length === 0">
               <option *ngFor="let node of nodes" [value]="node.node">
                   {{ node.node }} (CPU: {{ node.cpu * 100 | number:'1.1-1' }}%, Mem: {{ (node.mem / node.maxmem * 100) | number:'1.1-1' }}%)
               </option>
           </select>
       </div>
-       <div *ngIf="nodes.length === 0 && !isLoadingNodes" class="ms-3 text-muted">
-          请先加载节点或检查后端连接。
+       <div *ngIf="nodes.length === 0 && !isLoadingNodes" class="text-muted me-3">
+          请先加载节点。
        </div>
+       <button class="btn btn-success" (click)="openCreateModal()" [disabled]="!selectedNode">
+           <i class="bi bi-plus-circle"></i> 创建容器
+       </button>
   </div>
 
-  <h2>创建 LXC 容器</h2>
-  <form #lxcForm="ngForm" (ngSubmit)="onSubmit()">
-      <div class="row g-3">
-          <div class="col-md-6">
-              <div class="mb-3">
-                  <label for="vmid" class="form-label">VMID <span class="text-danger">*</span></label>
-                  <input type="number" class="form-control" id="vmid" name="vmid" [(ngModel)]="containerConfig.vmid" required #vmid="ngModel">
-                  <div *ngIf="vmid.invalid && (vmid.dirty || vmid.touched)" class="invalid-feedback d-block">VMID 是必填项且必须是数字。</div>
-              </div>
-              <div class="mb-3">
-                  <label for="hostname" class="form-label">主机名 <span class="text-danger">*</span></label>
-                  <input type="text" class="form-control" id="hostname" name="hostname" [(ngModel)]="containerConfig.hostname" required #hostname="ngModel">
-                   <div *ngIf="hostname.invalid && (hostname.dirty || hostname.touched)" class="invalid-feedback d-block">主机名是必填项。</div>
-              </div>
-              <div class="mb-3">
-                  <label for="password" class="form-label">密码 <span class="text-danger">*</span></label>
-                  <input type="password" class="form-control" id="password" name="password" [(ngModel)]="containerConfig.password" required minlength="6" #password="ngModel">
-                   <div *ngIf="password.invalid && (password.dirty || password.touched)" class="invalid-feedback d-block">
-                       <span *ngIf="password.errors?.['required']">密码是必填项。</span>
-                       <span *ngIf="password.errors?.['minlength']">密码至少需要 6 位。</span>
-                   </div>
-              </div>
-               <div class="mb-3">
-                  <label for="ostemplate" class="form-label">系统模板 <span class="text-danger">*</span></label>
-                  <input type="text" class="form-control" id="ostemplate" name="ostemplate" [(ngModel)]="containerConfig.ostemplate" required placeholder="例如: local:vztmpl/ubuntu-22.04..." #ostemplate="ngModel">
-                   <div *ngIf="ostemplate.invalid && (ostemplate.dirty || ostemplate.touched)" class="invalid-feedback d-block">系统模板是必填项。</div>
-              </div>
-          </div>
-          <div class="col-md-6">
-              <div class="mb-3">
-                  <label for="storage" class="form-label">存储 <span class="text-danger">*</span></label>
-                  <input type="text" class="form-control" id="storage" name="storage" [(ngModel)]="containerConfig.storage" required placeholder="例如: local-lvm" #storage="ngModel">
-                   <div *ngIf="storage.invalid && (storage.dirty || storage.touched)" class="invalid-feedback d-block">存储是必填项。</div>
-              </div>
-              <div class="mb-3">
-                  <label for="net0" class="form-label">网络 (net0) <span class="text-danger">*</span></label>
-                  <input type="text" class="form-control" id="net0" name="net0" [(ngModel)]="containerConfig.net0" required placeholder="例如: name=eth0,bridge=vmbr0,ip=dhcp" #net0="ngModel">
-                   <div *ngIf="net0.invalid && (net0.dirty || net0.touched)" class="invalid-feedback d-block">网络配置是必填项。</div>
-              </div>
-              <div class="row">
-                  <div class="col-md-4">
-                      <label for="cores" class="form-label">CPU核心</label>
-                      <input type="number" class="form-control" id="cores" name="cores" [(ngModel)]="containerConfig.cores" min="1">
-                  </div>
-                  <div class="col-md-4">
-                      <label for="memory" class="form-label">内存 (MB)</label>
-                      <input type="number" class="form-control" id="memory" name="memory" [(ngModel)]="containerConfig.memory" min="128">
-                  </div>
-                  <div class="col-md-4">
-                      <label for="swap" class="form-label">SWAP (MB)</label>
-                      <input type="number" class="form-control" id="swap" name="swap" [(ngModel)]="containerConfig.swap" min="0">
-                  </div>
-              </div>
-          </div>
-      </div>
-      <button type="submit" class="btn btn-success mt-3" [disabled]="!lxcForm.form.valid || !selectedNode || isCreating">
-          <span *ngIf="isCreating" class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-          {{ isCreating ? '创建中...' : '创建容器' }}
+  <div class="table-responsive">
+      <table class="table table-striped table-hover">
+          <thead>
+              <tr>
+                  <th>VMID</th>
+                  <th>名称</th>
+                  <th>状态</th>
+                  <th>CPU</th>
+                  <th>内存</th>
+                  <th>操作</th>
+              </tr>
+          </thead>
+          <tbody>
+              <tr *ngIf="isLoadingContainers">
+                  <td colspan="6" class="text-center">
+                      <div class="spinner-border text-primary" role="status">
+                          <span class="visually-hidden">加载中...</span>
+                      </div>
+                  </td>
+              </tr>
+              <tr *ngIf="!isLoadingContainers && containers.length === 0">
+                  <td colspan="6" class="text-center text-muted">
+                      {{ selectedNode ? '此节点上没有容器。' : '请先选择一个节点。' }}
+                  </td>
+              </tr>
+              <tr *ngFor="let container of containers">
+                  <td>{{ container.vmid }}</td>
+                  <td>{{ container.name }}</td>
+                  <td>
+                      <span class="badge" [ngClass]="{'bg-success': container.status === 'running', 'bg-secondary': container.status === 'stopped', 'bg-warning': container.status !== 'running' && container.status !== 'stopped'}">
+                          {{ container.status }}
+                      </span>
+                  </td>
+                  <td>{{ container.cpu * 100 | number:'1.1-1' }}%</td>
+                  <td>{{ container.mem / (1024*1024) | number:'1.0-0' }} MB / {{ container.maxmem / (1024*1024) | number:'1.0-0' }} MB</td>
+                  <td>
+                      <div class="btn-group" role="group">
+                          <button class="btn btn-sm btn-outline-success" (click)="startContainer(container)" [disabled]="container.status === 'running' || container.isLoading">
+                              <span *ngIf="container.isLoading && actionType === 'start'" class="spinner-border spinner-border-sm"></span>
+                              <i *ngIf="!(container.isLoading && actionType === 'start')" class="bi bi-play-fill"></i>
+                          </button>
+                           <button class="btn btn-sm btn-outline-warning" (click)="stopContainer(container)" [disabled]="container.status === 'stopped' || container.isLoading">
+                               <span *ngIf="container.isLoading && actionType === 'stop'" class="spinner-border spinner-border-sm"></span>
+                               <i *ngIf="!(container.isLoading && actionType === 'stop')" class="bi bi-stop-fill"></i>
+                          </button>
+                          <button class="btn btn-sm btn-outline-danger" (click)="deleteContainer(container)" [disabled]="container.isLoading">
+                              <span *ngIf="container.isLoading && actionType === 'delete'" class="spinner-border spinner-border-sm"></span>
+                              <i *ngIf="!(container.isLoading && actionType === 'delete')" class="bi bi-trash-fill"></i>
+                          </button>
+                      </div>
+                  </td>
+              </tr>
+          </tbody>
+      </table>
+      <button class="btn btn-secondary btn-sm" (click)="loadContainers()" [disabled]="!selectedNode || isLoadingContainers">
+           <span *ngIf="isLoadingContainers" class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+           刷新列表
       </button>
-  </form>
+  </div>
 
 </div>
+
+
+<div class="modal fade" [ngClass]="{'show d-block': showCreateModal}" tabindex="-1" role="dialog">
+    <div class="modal-dialog modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">在节点 '{{selectedNode}}' 上创建 LXC 容器</h5>
+                <button type="button" class="btn-close" (click)="closeCreateModal()" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form #lxcForm="ngForm" (ngSubmit)="onSubmit()">
+                  <div class="row g-3">
+                      <div class="col-md-6">
+                          <div class="mb-3">
+                              <label for="vmid" class="form-label">VMID <span class="text-danger">*</span></label>
+                              <input type="number" class="form-control" id="vmid" name="vmid" [(ngModel)]="containerConfig.vmid" required #vmid="ngModel">
+                              <div *ngIf="vmid.invalid && (vmid.dirty || vmid.touched)" class="invalid-feedback d-block">VMID 是必填项且必须是数字。</div>
+                          </div>
+                          <div class="mb-3">
+                              <label for="hostname" class="form-label">主机名 <span class="text-danger">*</span></label>
+                              <input type="text" class="form-control" id="hostname" name="hostname" [(ngModel)]="containerConfig.hostname" required #hostname="ngModel">
+                               <div *ngIf="hostname.invalid && (hostname.dirty || hostname.touched)" class="invalid-feedback d-block">主机名是必填项。</div>
+                          </div>
+                          <div class="mb-3">
+                              <label for="password" class="form-label">密码 <span class="text-danger">*</span></label>
+                              <input type="password" class="form-control" id="password" name="password" [(ngModel)]="containerConfig.password" required minlength="6" #password="ngModel">
+                               <div *ngIf="password.invalid && (password.dirty || password.touched)" class="invalid-feedback d-block">
+                                   <span *ngIf="password.errors?.['required']">密码是必填项。</span>
+                                   <span *ngIf="password.errors?.['minlength']">密码至少需要 6 位。</span>
+                               </div>
+                          </div>
+                           <div class="mb-3">
+                              <label for="ostemplate" class="form-label">系统模板 <span class="text-danger">*</span></label>
+                              <input type="text" class="form-control" id="ostemplate" name="ostemplate" [(ngModel)]="containerConfig.ostemplate" required placeholder="例如: local:vztmpl/ubuntu-22.04..." #ostemplate="ngModel">
+                               <div *ngIf="ostemplate.invalid && (ostemplate.dirty || ostemplate.touched)" class="invalid-feedback d-block">系统模板是必填项。</div>
+                          </div>
+                      </div>
+                      <div class="col-md-6">
+                          <div class="mb-3">
+                              <label for="storage" class="form-label">存储 <span class="text-danger">*</span></label>
+                              <input type="text" class="form-control" id="storage" name="storage" [(ngModel)]="containerConfig.storage" required placeholder="例如: local-lvm" #storage="ngModel">
+                               <div *ngIf="storage.invalid && (storage.dirty || storage.touched)" class="invalid-feedback d-block">存储是必填项。</div>
+                          </div>
+                          <div class="mb-3">
+                              <label for="net0" class="form-label">网络 (net0) <span class="text-danger">*</span></label>
+                              <input type="text" class="form-control" id="net0" name="net0" [(ngModel)]="containerConfig.net0" required placeholder="例如: name=eth0,bridge=vmbr0,ip=dhcp" #net0="ngModel">
+                               <div *ngIf="net0.invalid && (net0.dirty || net0.touched)" class="invalid-feedback d-block">网络配置是必填项。</div>
+                          </div>
+                          <div class="row">
+                              <div class="col-md-4">
+                                  <label for="cores" class="form-label">CPU核心</label>
+                                  <input type="number" class="form-control" id="cores" name="cores" [(ngModel)]="containerConfig.cores" min="1">
+                              </div>
+                              <div class="col-md-4">
+                                  <label for="memory" class="form-label">内存 (MB)</label>
+                                  <input type="number" class="form-control" id="memory" name="memory" [(ngModel)]="containerConfig.memory" min="128">
+                              </div>
+                              <div class="col-md-4">
+                                  <label for="swap" class="form-label">SWAP (MB)</label>
+                                  <input type="number" class="form-control" id="swap" name="swap" [(ngModel)]="containerConfig.swap" min="0">
+                              </div>
+                          </div>
+                      </div>
+                  </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" (click)="closeCreateModal()">取消</button>
+                <button type="submit" class="btn btn-success" (click)="onSubmit()" [disabled]="!lxcForm.form.valid || !selectedNode || isCreating">
+                    <span *ngIf="isCreating" class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                    {{ isCreating ? '创建中...' : '创建容器' }}
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+<div class="modal-backdrop fade" [ngClass]="{'show': showCreateModal}" *ngIf="showCreateModal"></div>
