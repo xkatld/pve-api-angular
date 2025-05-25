@@ -7,7 +7,8 @@ from proxmoxer import ProxmoxAPI
 
 from app.services.pve_service import (
     get_pve_api, list_nodes, create_container,
-    list_lxc, start_lxc, stop_lxc, delete_lxc
+    list_lxc, start_lxc, stop_lxc, delete_lxc,
+    list_storages, list_templates, list_bridges
 )
 from app.core.config import settings
 import logging
@@ -79,10 +80,37 @@ class ContainerConfig(BaseModel):
     cores: int = Field(1, gt=0, description="CPU 核心数")
     memory: int = Field(512, gt=127, description="内存大小 (MB)")
     swap: int = Field(512, ge=0, description="SWAP 大小 (MB)")
+    cpulimit: Optional[int] = Field(0, ge=0, description="CPU 限制 (0 = 无限制)")
+    rate: Optional[int] = Field(0, ge=0, description="网络速率限制 (MB/s, 0 = 无限制)")
+    unprivileged: Optional[bool] = Field(True, description="是否为非特权容器 (True=非特权)")
+    nesting: Optional[bool] = Field(False, description="是否开启嵌套虚拟化")
 
 class ActionResponse(BaseModel):
     message: str
     data: Any
+
+class TemplateInfo(BaseModel):
+    volid: str
+    size: int
+    format: str
+    content: str
+
+class StorageInfo(BaseModel):
+    storage: str
+    content: str
+    type: str
+    shared: int
+    active: int
+    used: int
+    total: int
+    avail: int
+
+class BridgeInfo(BaseModel):
+    iface: str
+    type: str
+    active: int
+    bridge_ports: Optional[str] = None
+    ipaddr: Optional[str] = None
 
 @api_router.get("/nodes",
                 summary="获取所有 PVE 节点列表",
@@ -104,7 +132,6 @@ def get_lxc_route(node_name: str = Path(..., description="Proxmox 节点名称")
                   api: ProxmoxAPI = Depends(get_api)):
     try:
         containers = list_lxc(api, node_name)
-        # Add node_name to each container for frontend convenience
         for c in containers:
             c['node'] = node_name
         return containers
@@ -120,7 +147,7 @@ def get_lxc_route(node_name: str = Path(..., description="Proxmox 节点名称")
                  tags=["Containers"])
 def post_lxc_route(node_name: str, config: ContainerConfig, api: ProxmoxAPI = Depends(get_api)):
     try:
-        config_dict = config.model_dump()
+        config_dict = config.model_dump(exclude_none=True)
         logger.info(f"接收到创建容器请求，节点: {node_name}, 配置: {config_dict}")
         result = create_container(api, node_name, config_dict)
         return {"message": "容器创建任务已成功启动", "data": result}
@@ -174,6 +201,34 @@ def delete_lxc_route(node_name: str = Path(..., description="Proxmox 节点名�
     except Exception as e:
         logger.error(f"删除容器 {vmid} 时出错 (节点: {node_name}): {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"删除容器时发生内部错误: {e}")
+
+@api_router.get("/nodes/{node_name}/resources",
+                summary="获取指定节点上的资源 (存储, 网桥, 模板)",
+                tags=["Resources"])
+def get_resources_route(node_name: str = Path(..., description="Proxmox 节点名称"),
+                        api: ProxmoxAPI = Depends(get_api)):
+    try:
+        storages_data = list_storages(api, node_name)
+        bridges_data = list_bridges(api, node_name)
+        
+        all_templates = []
+        template_storage_names = [s['storage'] for s in storages_data.get('templates', [])]
+        
+        for storage_name in template_storage_names:
+            try:
+                templates = list_templates(api, node_name, storage_name)
+                all_templates.extend(templates)
+            except Exception as e:
+                 logger.warning(f"无法从存储 '{storage_name}' 获取模板: {e}")
+
+        return {
+            "storages": storages_data,
+            "bridges": bridges_data,
+            "templates": all_templates
+        }
+    except Exception as e:
+        logger.error(f"获取资源时出错: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"获取资源列表时发生内部错误: {e}")
 
 
 app.include_router(api_router)
