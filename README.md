@@ -31,8 +31,6 @@ cd pve-api
 建议在虚拟环境中进行安装：
 
 ```bash
-python -m venv venv
-source venv/bin/activate  # 或者在 Windows 上: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
