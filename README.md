@@ -25,28 +25,9 @@ pve-api-angular/
 ├── README.md
 ├── backend/
 │   ├── app/
-│   │   ├── core/
-│   │   │   └── config.py
-│   │   ├── services/
-│   │   │   └── pve_service.py
-│   │   └── main.py
-│   └── requirements.txt
 └── frontend/
-    ├── angular.json
-    ├── package.json
     ├── src/
-    │   ├── app/
-    │   │   ├── app.component.css
-    │   │   ├── app.component.html
-    │   │   ├── app.component.ts
-    │   │   ├── app.module.ts
-    │   │   └── pve-api.service.ts
-    │   ├── index.html
-    │   ├── main.ts
-    │   └── styles.css
-    ├── tsconfig.app.json
-    ├── tsconfig.json
-    └── tsconfig.spec.json
+    └── ── app/ 
 ```
 
 ## 🚀 安装与设置
