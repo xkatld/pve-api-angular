@@ -20,14 +20,7 @@ export default defineConfig({
     }
   },
   server: {
-    port: 5173, // 您可以指定开发服务器端口
-    // proxy: {
-    //   '/api': {
-    //     target: 'https://<你的Debian服务器IP>:8000', // 代理到您的后端 API 地址
-    //     changeOrigin: true,
-    //     secure: false, // 如果后端是自签名证书，需要设置为 false
-    //     // rewrite: (path) => path.replace(/^\/api/, ''), // 如果需要重写路径
-    //   }
-    // }
+    host: '0.0.0.0',
+    port: 5173,
   }
 })
