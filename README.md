@@ -1,108 +1,99 @@
-# PVE Manager - Proxmox VE 网页管理界面 (FastAPI + Angular)
+# Proxmox LXC 管理前端 (Vue.js + Element Plus)
 
-这是一个全栈项目，旨在提供一个现代化的 Web 用户界面，用于管理 [Proxmox VE 8.x](https://www.proxmox.com/en/proxmox-ve) 环境。
+这是一个为 `zjmf-server-pve-lxc` 后端 API 设计的现代化前端用户界面。它提供了一个直观、友好的仪表盘，用于管理 Proxmox VE 上的 LXC 容器。
 
-它利用 Python FastAPI 提供后端 API 服务，并使用 Angular 构建前端用户界面。
+## 概述
 
-## ✨ 主要功能
+本项目旨在提供一个替代 Proxmox VE 自带界面的、专注于 LXC 容器管理的 Web 应用。用户可以通过这个界面轻松地查看容器列表、监控状态、执行生命周期操作 (启动、停止、重启、删除)、创建新容器以及访问容器控制台。
 
-* **后端 (FastAPI)**:
-    * 通过 `proxmoxer` 库与 Proxmox VE API 安全交互。
-* **前端 (Angular)**:
-    * 现代化的单页应用 (SPA) 界面。
-    * 使用 Bootstrap 5 进行样式设计。
+## 技术栈
 
-## ⚙️ 环境要求
+* **框架**: Vue.js 3
+* **构建工具**: Vite
+* **UI 库**: Element Plus
+* **路由**: Vue Router
+* **状态管理**: Pinia
+* **HTTP 客户端**: Axios
 
-* Proxmox VE 8.x
-* Python 3.10+
-* Node.js 16+
+## 主要特性
 
-## 🏗️ 项目结构
+* **容器列表**: 以表格形式清晰展示所有 (或指定节点) LXC 容器的关键信息 (VMID, 名称, 节点, 状态, 资源使用)。
+* **实时状态**: 简洁明了地展示容器的运行状态。
+* **快捷操作**: 支持容器的启动、关闭 (优雅)、停止 (强制)、重启和删除操作，并提供确认提示。
+* **创建容器**: 提供向导式表单，轻松配置并创建新的 LXC 容器。
+* **控制台访问**: 一键生成并打开 Proxmox Web VNC 控制台链接。
+* **API 密钥认证**: 通过简单的登录页面输入并保存后端 API 密钥。
+* **响应式布局**: 基于 Element Plus 的布局，能较好地适应不同屏幕尺寸。
 
-```
-pve-api-angular/
-├── README.md
-├── backend/
-│   ├── app/
-└── frontend/
-    ├── src/
-    └── ── app/ 
-```
+## 环境准备
 
-## 🚀 安装与设置
+* **Node.js**: 确保您的系统已安装 `v18.x` 或更高版本的 Node.js 和 npm/yarn。
+* **后端服务**: 必须先成功部署并运行 `zjmf-server-pve-lxc` 后端 API 服务，并确保前端可以访问到该服务的地址和端口。
 
-### 1. 克隆项目
+## 安装与配置
 
-```bash
-git clone https://github.com/xkatld/pve-api-angular
-cd pve-api-angular
-```
+1.  **获取代码**:
+    ```bash
+    git clone <你的前端项目仓库地址>
+    cd <前端项目目录>
+    ```
+    或者直接将我们之前生成的前端代码文件放置在一个名为 `frontend` (或您喜欢的名称) 的目录中。
 
-### 2. 设置后端 (FastAPI)
+2.  **安装依赖**:
+    ```bash
+    npm install
+    # 或者
+    # yarn install
+    ```
 
-```bash
-# 进入后端目录
-cd backend
+3.  **配置 API 地址**:
+    * 打开 `src/api/index.js` 文件。
+    * 找到 `baseURL` 配置项，将其值修改为您后端 API 的实际访问地址。例如：
+        ```javascript
+        baseURL: '[https://192.168.1.10:8000/api/v1](https://192.168.1.10:8000/api/v1)',
+        ```
+    * **重要**: 如果您的后端 API 使用的是自签名证书 (如此项目默认生成)，并且您 *没有* 在 Vite 中配置代理或浏览器不信任该证书，您可能需要在 `axios` 配置中添加 `https://` 或者处理 SSL 验证问题 (通常不推荐在生产中忽略 SSL 验证)。
 
-# (强烈建议) 创建并激活 Python 虚拟环境
-python -m venv venv
-source venv/bin/activate
+4.  **配置 Proxmox VNC 地址**:
+    * 打开 `src/views/ContainerList.vue` 文件。
+    * 找到 `openConsole` 函数中的 `url` 变量。
+    * 将其中的 `<你的Proxmox服务器IP>` 替换为您 Proxmox VE 服务器的实际 IP 地址或域名。例如：
+        ```javascript
+        const url = `https://192.168.1.100:8006/?console=lxc...`;
+        ```
 
-# 安装 Python 依赖
-pip install -r requirements.txt
-```
+## 开发模式运行
 
-### 3. 设置前端 (Angular)
-
-```bash
-# 返回项目根目录，然后进入前端目录
-cd frontend
-
-# 安装 Node.js 依赖
-npm install
-```
-
-### 3. 设置安全文件
-
-```bash
-# 后端安全文件
-/backend/.env
-
-# 前端安全文件
-/frontend/src/environments
-```
-
-
-
-## 💻 运行开发环境
-
-你需要**同时运行**后端和前端两个服务。请打开**两个终端**窗口：
-
-**终端 1: 启动后端 (FastAPI)**
+在项目根目录下运行以下命令启动开发服务器：
 
 ```bash
-cd backend
-source venv/bin/activate
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+npm run dev
 ```
 
-后端 API 将在 `http://0.0.0.0:8000` 启动。`--reload` 会在代码更改时自动重启。
+服务通常会启动在 `http://localhost:5173` (具体端口请查看命令行输出)。在浏览器中打开此地址。
 
-**终端 2: 启动前端 (Angular)**
+**首次访问**:
+
+* 您将被引导到 `/login` 页面。
+* 在此页面输入您在后端 `.env` 文件中设置的 `GLOBAL_API_KEY`。
+* 点击 "保存并进入"，密钥将被保存在浏览器的 `localStorage` 中，之后您就可以访问其他页面了。
+
+## 生产环境构建
+
+当您准备好部署应用时，运行以下命令进行构建：
 
 ```bash
-cd frontend
-
-# 运行 ng serve 并监听 0.0.0.0 以便从其他机器访问
-npm start -- --host 0.0.0.0
+npm run build
 ```
 
-Angular 开发服务器将启动，并监听 `http://0.0.0.0:4200`。
+这将在项目根目录下创建一个 `dist` 文件夹，其中包含所有静态资源。您可以将此 `dist` 文件夹的内容部署到任何静态文件服务器 (如 Nginx, Apache, Vercel, Netlify 等) 或直接集成到您的后端服务中。
 
-## 📚 API 文档
+## 使用说明
 
-当后端服务运行时，你可以通过浏览器访问以下地址查看自动生成的 API 文档：
+1.  **登录**: 通过 `/login` 页面输入 API 密钥。
+2.  **查看列表**: 访问主页 (`/`) 查看容器列表及其状态。
+3.  **执行操作**: 点击列表中的操作按钮执行相应操作。
+4.  **创建容器**: 访问 `/create` 页面填写表单并创建新容器。
+5.  **退出登录**: 点击页面右上角的 "退出登录" 按钮清除本地存储的 API 密钥并返回登录页。
 
-* **Swagger UI**: `http://127.0.0.1:8000/docs`
-* **ReDoc**: `http://127.0.0.1:8000/redoc`
+---
