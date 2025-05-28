@@ -2,14 +2,14 @@ import { createRouter, createWebHistory } from 'vue-router'
 import DefaultLayout from '../layouts/DefaultLayout.vue'
 import ContainerList from '../views/ContainerList.vue'
 import CreateContainer from '../views/CreateContainer.vue'
-import Login from '../views/Login.vue'
+import BackendConfig from '../views/BackendConfig.vue'
 import { useAuthStore } from '../stores/auth'
 
 const routes = [
   {
-    path: '/login',
-    name: 'Login',
-    component: Login,
+    path: '/config',
+    name: 'BackendConfig',
+    component: BackendConfig,
   },
   {
     path: '/',
@@ -38,8 +38,8 @@ const router = createRouter({
 
 router.beforeEach((to, from, next) => {
   const authStore = useAuthStore()
-  if (to.meta.requiresAuth && !authStore.apiKey) {
-    next({ name: 'Login' })
+  if (to.meta.requiresAuth && !authStore.activeBackendId) {
+    next({ name: 'BackendConfig' })
   } else {
     next()
   }
