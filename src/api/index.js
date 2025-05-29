@@ -15,14 +15,14 @@ apiClient.interceptors.request.use(
     if (authStore.currentBaseURL) {
       config.baseURL = authStore.currentBaseURL
     } else {
-      router.push('/login')
+      router.push('/config')
       return Promise.reject(new Error('未选择后端或未配置后端地址'))
     }
 
     if (authStore.apiKey) {
       config.headers.Authorization = `Bearer ${authStore.apiKey}`
     } else {
-      router.push('/login')
+      router.push('/config')
       return Promise.reject(new Error('未提供 API 密钥'))
     }
     return config
@@ -34,7 +34,11 @@ apiClient.interceptors.request.use(
 
 apiClient.interceptors.response.use(
   (response) => {
-    return response.data
+    if (response.data && response.data.success === false) {
+       ElMessage.error(response.data.message || '操作失败');
+       return Promise.reject(new Error(response.data.message || '操作失败'));
+    }
+    return response.data.data !== undefined ? response.data.data : response.data;
   },
   (error) => {
     const message = error.response?.data?.detail || error.message || '网络请求失败'
@@ -42,7 +46,7 @@ apiClient.interceptors.response.use(
     if (error.response?.status === 401) {
       const authStore = useAuthStore()
       authStore.clearAuth()
-      router.push('/login')
+      router.push('/config')
     }
     return Promise.reject(error)
   }
