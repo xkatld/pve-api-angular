@@ -1,5 +1,21 @@
 import apiClient from './index'
 
+export const getNodesApi = () => {
+  return apiClient.get('/nodes')
+}
+
+export const getNodeTemplatesApi = (node) => {
+  return apiClient.get(`/nodes/${node}/templates`)
+}
+
+export const getNodeStoragesApi = (node) => {
+  return apiClient.get(`/nodes/${node}/storages`)
+}
+
+export const getNodeNetworksApi = (node) => {
+  return apiClient.get(`/nodes/${node}/networks`)
+}
+
 export const getContainersApi = (node = null) => {
   return apiClient.get('/containers', { params: { node } })
 }
@@ -41,5 +57,5 @@ export const getTaskStatusApi = (node, taskId) => {
 }
 
 export const getConsoleApi = (node, vmid) => {
-    return apiClient.post(`/containers/${node}/${vmid}/console`);
+  return apiClient.post(`/containers/${node}/${vmid}/console`);
 }
