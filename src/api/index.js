@@ -38,7 +38,7 @@ apiClient.interceptors.response.use(
 
     if (responseData && typeof responseData.success === 'boolean' && responseData.hasOwnProperty('message')) {
       if (responseData.success === true) {
-        if (responseData.message) {
+        if (responseData.message && response.config.method !== 'get' && response.config.method !== 'GET') {
           ElMessage.success(responseData.message)
         }
         return responseData.data
@@ -57,9 +57,13 @@ apiClient.interceptors.response.use(
   (error) => {
     let message = '网络请求失败或发生未知错误'
     if (error.response && error.response.data) {
-      message = error.response.data.message || error.response.data.detail || error.message || '服务器错误'
+      if (error.response.data.detail && Array.isArray(error.response.data.detail) && error.response.data.detail.length > 0) {
+        message = error.response.data.detail.map(d => `${d.loc.join(' -> ')}: ${d.msg}`).join('; ');
+      } else {
+        message = error.response.data.message || error.response.data.detail || error.message || '服务器错误';
+      }
     } else if (error.message) {
-      message = error.message
+      message = error.message;
     }
 
     ElMessage.error(message)
