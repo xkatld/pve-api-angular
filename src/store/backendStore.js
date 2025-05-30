@@ -9,12 +9,29 @@ export const useBackendStore = defineStore('backend', () => {
     return backendList.value.find(b => b.id === activeBackendId.value) || null
   })
 
-  function addBackend(backend) {
-    const newBackend = { ...backend, id: Date.now().toString() }
+  function addBackend(backendData) {
+    const newBackend = {
+      id: Date.now().toString(),
+      name: backendData.name || `后端服务 #${backendList.value.length + 1}`,
+      url: backendData.url,
+      apiKey: backendData.apiKey,
+      pveNodes: Array.isArray(backendData.pveNodes) ? backendData.pveNodes : []
+    }
     backendList.value.push(newBackend)
     saveToLocalStorage()
     if (!activeBackendId.value && backendList.value.length > 0) {
       setActiveBackend(newBackend.id)
+    }
+  }
+
+  function updateBackend(backendId, updatedData) {
+    const backendIndex = backendList.value.findIndex(b => b.id === backendId)
+    if (backendIndex !== -1) {
+      backendList.value[backendIndex] = {
+        ...backendList.value[backendIndex],
+        ...updatedData
+      }
+      saveToLocalStorage()
     }
   }
 
@@ -41,6 +58,7 @@ export const useBackendStore = defineStore('backend', () => {
     activeBackendId,
     activeBackend,
     addBackend,
+    updateBackend,
     removeBackend,
     setActiveBackend
   }
