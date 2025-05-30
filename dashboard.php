@@ -43,7 +43,7 @@ $selected_backend = get_selected_backend();
         <button type="submit" name="select_backend">切换后端</button>
     </form>
     <?php else: ?>
-    <p>没有配置后端服务器。请先前往 <a href="manage_backends.php">后端管理</a> 添加服务器。</p>
+    <p>没有配置后端服务器。请先前往 <a href="templates/manage_backends.php">后端管理</a> 添加服务器。</p>
     <?php endif; ?>
 
     <?php if ($selected_backend): ?>
@@ -52,9 +52,9 @@ $selected_backend = get_selected_backend();
     <p>Proxmox VE URL: <?php echo eh($selected_backend['pve_url'] ?? '未设置，部分功能如控制台可能无法使用'); ?></p>
     <p>您现在可以对选定的后端服务器执行操作了。</p>
     <ul>
-        <li><a href="nodes_list.php">查看节点列表</a></li>
-        <li><a href="containers_list.php">查看容器列表</a></li>
-        <li><a href="create_container_form.php">创建新容器</a></li>
+        <li><a href="templates/nodes_list.php">查看节点列表</a></li>
+        <li><a href="templates/containers_list.php">查看容器列表</a></li>
+        <li><a href="templates/create_container_form.php">创建新容器</a></li>
     </ul>
     <?php elseif (!empty($backend_servers)): ?>
     <p>请从上方选择一个后端服务器以继续操作。</p>
