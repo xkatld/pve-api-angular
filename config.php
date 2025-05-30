@@ -6,7 +6,8 @@ $_SESSION['backend_servers'] = isset($_SESSION['backend_servers']) ? $_SESSION['
     [
         'id' => 'pve1',
         'name' => 'Proxmox服务器1号',
-        'url' => 'http://192.168.1.100:8000',
+        'api_url' => 'http://192.168.1.100:8000',
+        'pve_url' => 'https://192.168.1.100:8006',
         'api_key' => '后端服务器1的GLOBAL_API_KEY'
     ]
 ];
@@ -23,7 +24,7 @@ function get_backend_servers() {
     return isset($_SESSION['backend_servers']) ? $_SESSION['backend_servers'] : [];
 }
 
-function add_backend_server($id, $name, $url, $api_key) {
+function add_backend_server($id, $name, $api_url, $pve_url, $api_key) {
     if (!isset($_SESSION['backend_servers'])) {
         $_SESSION['backend_servers'] = [];
     }
@@ -32,20 +33,20 @@ function add_backend_server($id, $name, $url, $api_key) {
             return false;
         }
     }
-    $_SESSION['backend_servers'][] = ['id' => $id, 'name' => $name, 'url' => $url, 'api_key' => $api_key];
+    $_SESSION['backend_servers'][] = ['id' => $id, 'name' => $name, 'api_url' => $api_url, 'pve_url' => $pve_url, 'api_key' => $api_key];
     if (count($_SESSION['backend_servers']) === 1) {
         $_SESSION['selected_backend_id'] = $id;
     }
     return true;
 }
 
-function update_backend_server($original_id, $new_id, $name, $url, $api_key) {
+function update_backend_server($original_id, $new_id, $name, $api_url, $pve_url, $api_key) {
     if (!isset($_SESSION['backend_servers'])) {
         return false;
     }
     foreach ($_SESSION['backend_servers'] as $key => $server) {
         if ($server['id'] === $original_id) {
-            $_SESSION['backend_servers'][$key] = ['id' => $new_id, 'name' => $name, 'url' => $url, 'api_key' => $api_key];
+            $_SESSION['backend_servers'][$key] = ['id' => $new_id, 'name' => $name, 'api_url' => $api_url, 'pve_url' => $pve_url, 'api_key' => $api_key];
             if ($_SESSION['selected_backend_id'] === $original_id) {
                 $_SESSION['selected_backend_id'] = $new_id;
             }
@@ -81,6 +82,11 @@ function get_selected_backend() {
         if ($server['id'] === $_SESSION['selected_backend_id']) {
             return $server;
         }
+    }
+    // Fallback if selected_backend_id is stale
+    if (!empty($_SESSION['backend_servers'])) {
+        $_SESSION['selected_backend_id'] = $_SESSION['backend_servers'][0]['id'];
+        return $_SESSION['backend_servers'][0];
     }
     return null;
 }
