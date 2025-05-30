@@ -54,13 +54,13 @@ function format_uptime($seconds) {
 
 function get_api_handler() {
     $selected_backend = get_selected_backend();
-    if (!$selected_backend) {
-        $_SESSION['error_message'] = '请先选择一个后端服务器。';
+    if (!$selected_backend || !isset($selected_backend['api_url']) || !isset($selected_backend['api_key'])) {
+        $_SESSION['error_message'] = '请先选择一个配置完整的后端服务器。';
         header('Location: manage_backends.php');
         exit;
     }
     require_once __DIR__ . '/PveApiHandler.php';
-    return new PveApiHandler($selected_backend['url'], $selected_backend['api_key']);
+    return new PveApiHandler($selected_backend['api_url'], $selected_backend['api_key']);
 }
 
 function get_query_param($name, $default = null) {
