@@ -13,7 +13,7 @@ export const useBackendStore = defineStore('backend', () => {
     const newBackend = { ...backend, id: Date.now().toString() }
     backendList.value.push(newBackend)
     saveToLocalStorage()
-    if (!activeBackendId.value) {
+    if (!activeBackendId.value && backendList.value.length > 0) {
       setActiveBackend(newBackend.id)
     }
   }
@@ -22,14 +22,14 @@ export const useBackendStore = defineStore('backend', () => {
     backendList.value = backendList.value.filter(b => b.id !== backendId)
     if (activeBackendId.value === backendId) {
       activeBackendId.value = backendList.value.length > 0 ? backendList.value[0].id : null
-      localStorage.setItem('pveLxcWebActiveBackendId', activeBackendId.value)
+      localStorage.setItem('pveLxcWebActiveBackendId', activeBackendId.value || '')
     }
     saveToLocalStorage()
   }
 
   function setActiveBackend(backendId) {
     activeBackendId.value = backendId
-    localStorage.setItem('pveLxcWebActiveBackendId', backendId)
+    localStorage.setItem('pveLxcWebActiveBackendId', backendId || '')
   }
 
   function saveToLocalStorage() {
