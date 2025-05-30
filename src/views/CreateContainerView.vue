@@ -1,15 +1,15 @@
 <template>
-  <div>
+  <div class="page-container">
     <h2>创建 LXC 容器</h2>
-    <el-form :model="formData" ref="createFormRef" label-width="150px" style="max-width: 700px">
+    <el-form :model="formData" ref="createFormRef" label-width="150px" style="max-width: 700px" label-position="right">
       <el-form-item label="目标节点" prop="node" :rules="[{ required: true, message: '请选择目标节点'}]">
-        <el-select v-model="formData.node" placeholder="请选择节点" @change="handleNodeChange" filterable>
+        <el-select v-model="formData.node" placeholder="请选择节点" @change="handleNodeChange" filterable style="width:100%;">
           <el-option v-for="item in availableNodes" :key="item.node" :label="item.node" :value="item.node"></el-option>
         </el-select>
       </el-form-item>
 
-      <el-form-item label="VMID" prop="vmid" :rules="[{ required: true, message: '请输入VMID'}, { type: 'integer', message: 'VMID必须是数字'}]">
-        <el-input-number v-model="formData.vmid" :min="100" placeholder="例如: 101"></el-input-number>
+      <el-form-item label="VMID" prop="vmid" :rules="[{ required: true, message: '请输入VMID'}, { type: 'integer', message: 'VMID必须是数字', transform: (value) => Number(value) }]">
+        <el-input-number v-model="formData.vmid" :min="100" placeholder="例如: 101" style="width:100%;"></el-input-number>
       </el-form-item>
 
       <el-form-item label="主机名" prop="hostname" :rules="[{ required: true, message: '请输入主机名'}]">
@@ -21,37 +21,37 @@
       </el-form-item>
 
       <el-form-item label="操作系统模板" prop="ostemplate" :rules="[{ required: true, message: '请选择模板'}]">
-        <el-select v-model="formData.ostemplate" placeholder="请选择模板" :disabled="!formData.node || availableTemplates.length === 0" filterable clearable>
-          <el-option v-for="tpl in availableTemplates" :key="tpl.volid" :label="tpl.volid" :value="tpl.volid">
-             <span>{{ tpl.volid.split('/').pop() }} ({{ (tpl.size / (1024*1024*1024)).toFixed(2) }} GB)</span>
+        <el-select v-model="formData.ostemplate" placeholder="请选择模板" :disabled="!formData.node || loadingNodeResources || availableTemplates.length === 0" filterable clearable style="width:100%;">
+          <el-option v-for="tpl in availableTemplates" :key="tpl.volid" :label="tpl.volid.split('/').pop() + ` (${formatBytes(tpl.size)})`" :value="tpl.volid">
+             <span>{{ tpl.volid.split('/').pop() }} ({{ formatBytes(tpl.size) }})</span>
           </el-option>
         </el-select>
       </el-form-item>
 
       <el-form-item label="存储池" prop="storage" :rules="[{ required: true, message: '请选择存储池'}]">
-        <el-select v-model="formData.storage" placeholder="请选择存储池" :disabled="!formData.node || availableStorages.length === 0" filterable clearable>
-           <el-option v-for="s in availableStorages" :key="s.storage" :label="`${s.storage} (${s.type}, ${ (s.avail / (1024*1024*1024)).toFixed(2)}GB可用)`" :value="s.storage"></el-option>
+        <el-select v-model="formData.storage" placeholder="请选择存储池" :disabled="!formData.node || loadingNodeResources || availableStorages.length === 0" filterable clearable style="width:100%;">
+           <el-option v-for="s in availableStorages" :key="s.storage" :label="`${s.storage} (${s.type}, ${ formatBytes(s.avail)}可用)`" :value="s.storage"></el-option>
         </el-select>
       </el-form-item>
 
-      <el-form-item label="磁盘大小 (GB)" prop="disk_size" :rules="[{ required: true, message: '请输入磁盘大小'}, { type: 'integer', message: '磁盘大小必须是数字'}]">
-        <el-input-number v-model="formData.disk_size" :min="1" placeholder="例如: 8"></el-input-number>
+      <el-form-item label="磁盘大小 (GB)" prop="disk_size" :rules="[{ required: true, message: '请输入磁盘大小'}, { type: 'integer', message: '磁盘大小必须是数字', transform: (value) => Number(value) }]">
+        <el-input-number v-model="formData.disk_size" :min="1" placeholder="例如: 8" style="width:100%;"></el-input-number>
       </el-form-item>
 
-      <el-form-item label="CPU核心数" prop="cores" :rules="[{ required: true, message: '请输入核心数'}, { type: 'integer', message: '核心数必须是数字'}]">
-        <el-input-number v-model="formData.cores" :min="1" :max="maxCpuPerNode" placeholder="例如: 1"></el-input-number>
+      <el-form-item label="CPU核心数" prop="cores" :rules="[{ required: true, message: '请输入核心数'}, { type: 'integer', message: '核心数必须是数字', transform: (value) => Number(value) }]">
+        <el-input-number v-model="formData.cores" :min="1" :max="maxCpuPerNode" placeholder="例如: 1" style="width:100%;"></el-input-number>
       </el-form-item>
       
       <el-form-item label="CPU限制 (0不限制)" prop="cpulimit">
-        <el-input-number v-model="formData.cpulimit" :min="0" placeholder="可选, 0为不限制"></el-input-number>
+        <el-input-number v-model="formData.cpulimit" :min="0" placeholder="可选, 0为不限制" style="width:100%;"></el-input-number>
       </el-form-item>
 
-      <el-form-item label="内存 (MB)" prop="memory" :rules="[{ required: true, message: '请输入内存大小'}, { type: 'integer', message: '内存必须是数字'}]">
-        <el-input-number v-model="formData.memory" :min="64" :step="64" placeholder="例如: 512"></el-input-number>
+      <el-form-item label="内存 (MB)" prop="memory" :rules="[{ required: true, message: '请输入内存大小'}, { type: 'integer', message: '内存必须是数字', transform: (value) => Number(value) }]">
+        <el-input-number v-model="formData.memory" :min="64" :step="64" placeholder="例如: 512" style="width:100%;"></el-input-number>
       </el-form-item>
 
-       <el-form-item label="SWAP (MB)" prop="swap" :rules="[{ required: true, message: '请输入SWAP大小'}, { type: 'integer', message: 'SWAP必须是数字'}]">
-        <el-input-number v-model="formData.swap" :min="0" :step="64" placeholder="例如: 512"></el-input-number>
+       <el-form-item label="SWAP (MB)" prop="swap" :rules="[{ required: true, message: '请输入SWAP大小'}, { type: 'integer', message: 'SWAP必须是数字', transform: (value) => Number(value) }]">
+        <el-input-number v-model="formData.swap" :min="0" :step="64" placeholder="例如: 512" style="width:100%;"></el-input-number>
       </el-form-item>
 
       <h4>网络配置 (eth0)</h4>
@@ -59,7 +59,7 @@
         <el-input v-model="formData.network.name" placeholder="例如: eth0" disabled></el-input>
       </el-form-item>
       <el-form-item label="桥接网卡" prop="network.bridge" :rules="[{ required: true, message: '请选择桥接网卡'}]">
-         <el-select v-model="formData.network.bridge" placeholder="选择桥接网卡" :disabled="!formData.node || availableNetworks.length === 0" filterable clearable>
+         <el-select v-model="formData.network.bridge" placeholder="选择桥接网卡" :disabled="!formData.node || loadingNodeResources || availableNetworks.length === 0" filterable clearable style="width:100%;">
             <el-option v-for="net in availableNetworks" :key="net.iface" :label="net.iface" :value="net.iface"></el-option>
         </el-select>
       </el-form-item>
@@ -70,10 +70,10 @@
         <el-input v-model="formData.network.gw" placeholder="例如: 192.168.1.1 (可选)"></el-input>
       </el-form-item>
        <el-form-item label="VLAN标签" prop="network.vlan">
-        <el-input-number v-model="formData.network.vlan" :min="1" placeholder="可选"></el-input-number>
+        <el-input-number v-model="formData.network.vlan" :min="1" placeholder="可选" style="width:100%;"></el-input-number>
       </el-form-item>
       <el-form-item label="速率限制(MB/s)" prop="network.rate">
-        <el-input-number v-model="formData.network.rate" :min="1" placeholder="可选"></el-input-number>
+        <el-input-number v-model="formData.network.rate" :min="1" placeholder="可选" style="width:100%;"></el-input-number>
       </el-form-item>
 
       <h4>高级选项</h4>
@@ -97,14 +97,14 @@
       </el-form-item>
 
       <el-form-item>
-        <el-button type="primary" @click="submitForm" :loading="loading">立即创建</el-button>
-        <el-button @click="resetForm">重置</el-button>
+        <el-button type="primary" @click="submitForm" :loading="formSubmitting" icon="CirclePlus">立即创建</el-button>
+        <el-button @click="resetForm" icon="RefreshLeft">重置表单</el-button>
       </el-form-item>
     </el-form>
 
-     <el-dialog v-model="taskDialog.visible" :title="taskDialog.title" width="40%" :close-on-click-modal="false" :close-on-press-escape="false" :show-close="!taskDialog.running">
+     <el-dialog v-model="taskDialog.visible" :title="taskDialog.title" width="40%" :close-on-click-modal="false" :close-on-press-escape="false" :show-close="!taskDialog.running" draggable>
         <p>任务ID: {{ taskDialog.taskId }}</p>
-        <p>状态: <el-tag :type="getTaskStatusType(taskDialog.status)">{{ taskDialog.statusText }}</el-tag></p>
+        <p>状态: <el-tag :type="getTaskStatusType(taskDialog.status)" size="large">{{ taskDialog.statusText }}</el-tag></p>
         <p v-if="taskDialog.message">信息: {{ taskDialog.message }}</p>
         <template #footer>
           <el-button @click="taskDialog.visible = false" :disabled="taskDialog.running">关闭</el-button>
@@ -121,7 +121,9 @@ import { ElMessage } from 'element-plus'
 
 const backendStore = useBackendStore()
 const createFormRef = ref(null)
-const loading = ref(false)
+const formSubmitting = ref(false) // 用于提交按钮的loading状态
+const loadingNodeResources = ref(false) // 用于节点相关资源加载的loading状态
+
 
 const defaultNetwork = {
   name: 'eth0',
@@ -132,8 +134,8 @@ const defaultNetwork = {
   rate: null
 }
 
-const formData = reactive({
-  node: '',
+const initialFormData = () => ({
+  node: availableNodes.value.length > 0 ? availableNodes.value[0].node : '',
   vmid: null,
   hostname: '',
   password: '',
@@ -152,6 +154,8 @@ const formData = reactive({
   console_mode: "默认 (tty)"
 })
 
+const formData = reactive(initialFormData())
+
 const availableNodes = ref([])
 const availableTemplates = ref([])
 const availableStorages = ref([])
@@ -169,19 +173,30 @@ const taskDialog = reactive({
     intervalId: null
 })
 
+const formatBytes = (bytes, decimals = 2) => {
+    if (!bytes || bytes === 0 || typeof bytes !== 'number') return '0 Bytes';
+    const k = 1024;
+    const dm = decimals < 0 ? 0 : decimals;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+}
+
 const fetchInitialData = async () => {
   if (!backendStore.activeBackend) {
     ElMessage.warning('请先选择一个活动的后端服务器。')
     return
   }
-  loading.value = true
+  formSubmitting.value = true // 用formSubmitting表示页面初次加载节点
   try {
     const nodesResponse = await apiService.getNodes()
     if (nodesResponse.data.success && nodesResponse.data.data) {
       availableNodes.value = nodesResponse.data.data
       if (availableNodes.value.length > 0 && !formData.node) {
         formData.node = availableNodes.value[0].node
-        handleNodeChange(formData.node)
+      }
+      if (formData.node) { // 如果有默认节点或者已选节点，加载其资源
+          await handleNodeChange(formData.node, true) // silent = true to not reset fields
       }
     } else {
       ElMessage.error(nodesResponse.data.message || '获取节点列表失败')
@@ -189,21 +204,23 @@ const fetchInitialData = async () => {
     }
   } catch (error) {
     availableNodes.value = []
-    console.error(error)
+    console.error("获取节点列表时发生错误:", error)
   } finally {
-      loading.value = false
+      formSubmitting.value = false
   }
 }
 
-const handleNodeChange = async (selectedNode) => {
+const handleNodeChange = async (selectedNode, silent = false) => {
   if (!selectedNode) {
     availableTemplates.value = []
     availableStorages.value = []
     availableNetworks.value = []
     maxCpuPerNode.value = 1
-    formData.ostemplate = ''
-    formData.storage = ''
-    formData.network.bridge = ''
+    if (!silent) {
+        formData.ostemplate = ''
+        formData.storage = ''
+        formData.network.bridge = ''
+    }
     return
   }
 
@@ -213,14 +230,19 @@ const handleNodeChange = async (selectedNode) => {
       if (formData.cores > maxCpuPerNode.value) formData.cores = maxCpuPerNode.value
   }
 
-
-  loading.value = true
+  loadingNodeResources.value = true
   try {
     const [tplResponse, storageResponse, netResponse] = await Promise.allSettled([
       apiService.getNodeTemplates(selectedNode),
       apiService.getNodeStorages(selectedNode),
       apiService.getNodeNetworks(selectedNode)
     ])
+
+    if (!silent) { // 只有在用户手动切换节点时才清空依赖字段
+        formData.ostemplate = ''
+        formData.storage = ''
+        formData.network.bridge = ''
+    }
 
     if (tplResponse.status === 'fulfilled' && tplResponse.value.data.success) {
       availableTemplates.value = tplResponse.value.data.data || []
@@ -229,14 +251,14 @@ const handleNodeChange = async (selectedNode) => {
       availableTemplates.value = []
     }
     if (storageResponse.status === 'fulfilled' && storageResponse.value.data.success) {
-      availableStorages.value = (storageResponse.value.data.data || []).filter(s => s.content && (s.content.includes('rootdir') || s.content.includes('images')))
+      availableStorages.value = (storageResponse.value.data.data || []).filter(s => s.content && (s.content.includes('rootdir') || s.content.includes('images') || s.content.includes('vztmpl')))
     } else {
       ElMessage.error(storageResponse.value?.data?.message || `获取节点 ${selectedNode} 的存储失败`)
       availableStorages.value = []
     }
      if (netResponse.status === 'fulfilled' && netResponse.value.data.success) {
       availableNetworks.value = netResponse.value.data.data || []
-      if (availableNetworks.value.length > 0 && !formData.network.bridge) {
+      if (availableNetworks.value.length > 0 && (!formData.network.bridge || !silent)) {
         formData.network.bridge = availableNetworks.value[0].iface
       }
     } else {
@@ -251,7 +273,7 @@ const handleNodeChange = async (selectedNode) => {
     availableStorages.value = []
     availableNetworks.value = []
   } finally {
-      loading.value = false
+      loadingNodeResources.value = false
   }
 }
 
@@ -263,30 +285,34 @@ const pollTaskStatus = (node, taskId) => {
       const response = await apiService.getTaskStatus(node, taskId)
       const pveTask = response.data.data
       taskDialog.status = pveTask.status
-      taskDialog.statusText = `类型: ${pveTask.type}, 状态: ${pveTask.status}`
+      taskDialog.statusText = `类型: ${pveTask.type || '未知'}, 状态: ${pveTask.status || '未知'}`
       if (pveTask.status === 'stopped') {
         clearInterval(taskDialog.intervalId)
         taskDialog.running = false
-        taskDialog.statusText = `任务完成: ${pveTask.exitstatus === 'OK' ? '成功' : `失败 (${pveTask.exitstatus})`}`
-        taskDialog.message = pveTask.exitstatus !== 'OK' ? `错误: ${pveTask.exitstatus}` : '容器创建成功！'
+        taskDialog.statusText = `任务完成: ${pveTask.exitstatus === 'OK' ? '成功' : `失败 (${pveTask.exitstatus || '未知'})`}`
+        taskDialog.message = pveTask.exitstatus !== 'OK' ? `错误: ${pveTask.exitstatus || '未知错误'}` : '容器创建成功！'
         ElMessage({
             message: taskDialog.message,
             type: pveTask.exitstatus === 'OK' ? 'success' : 'error',
-            duration: 5000
+            duration: 5000,
+            showClose: true
         })
+        if (pveTask.exitstatus === 'OK') {
+             resetForm(false); // 创建成功后重置表单，但保留节点选择
+        }
       } else if (pveTask.status === 'error') {
         clearInterval(taskDialog.intervalId)
         taskDialog.running = false
         taskDialog.statusText = '任务出错'
         taskDialog.message = `错误: ${pveTask.exitstatus || '未知错误'}`
-         ElMessage.error(taskDialog.message, 5000)
+        ElMessage.error({message: taskDialog.message, duration: 5000, showClose: true})
       }
     } catch (error) {
       clearInterval(taskDialog.intervalId)
       taskDialog.running = false
       taskDialog.status = 'error'
       taskDialog.statusText = '查询任务状态失败'
-      console.error(error)
+      console.error("轮询任务状态时发生错误:", error)
     }
   }, 3000)
 }
@@ -294,7 +320,7 @@ const pollTaskStatus = (node, taskId) => {
 const submitForm = () => {
   createFormRef.value.validate(async (valid) => {
     if (valid) {
-      loading.value = true
+      formSubmitting.value = true
       try {
         const payload = { ...formData }
         payload.vmid = Number(payload.vmid)
@@ -302,9 +328,14 @@ const submitForm = () => {
         payload.cores = Number(payload.cores)
         payload.memory = Number(payload.memory)
         payload.swap = Number(payload.swap)
-        if (payload.network.vlan) payload.network.vlan = Number(payload.network.vlan)
-        if (payload.network.rate) payload.network.rate = Number(payload.network.rate)
-        if (payload.cpulimit !== null) payload.cpulimit = Number(payload.cpulimit)
+        if (payload.network.vlan !== null && payload.network.vlan !== '') payload.network.vlan = Number(payload.network.vlan)
+        else delete payload.network.vlan
+
+        if (payload.network.rate !== null && payload.network.rate !== '') payload.network.rate = Number(payload.network.rate)
+        else delete payload.network.rate
+        
+        if (payload.cpulimit !== null && payload.cpulimit !== '') payload.cpulimit = Number(payload.cpulimit)
+        else delete payload.cpulimit
 
 
         const response = await apiService.createContainer(payload)
@@ -322,9 +353,9 @@ const submitForm = () => {
           ElMessage.error(response.data.message || '创建容器失败')
         }
       } catch (error) {
-        console.error(error)
+        console.error("创建容器时发生错误:", error)
       } finally {
-        loading.value = false
+        formSubmitting.value = false
       }
     } else {
       ElMessage.error('请检查表单填写是否正确！')
@@ -333,32 +364,26 @@ const submitForm = () => {
   })
 }
 
-const resetForm = () => {
+const resetForm = (resetNode = true) => {
+  const currentNode = formData.node;
+  const currentBridge = formData.network.bridge;
+
   if(createFormRef.value) createFormRef.value.resetFields()
-  Object.assign(formData, {
-    vmid: null,
-    hostname: '',
-    password: '',
-    ostemplate: '',
-    storage: '',
-    disk_size: 8,
-    cores: 1,
-    cpulimit: null,
-    memory: 512,
-    swap: 512,
-    network: { ...defaultNetwork, bridge: formData.network.bridge }, // 保留已选节点的相关网络桥接
-    nesting: false,
-    unprivileged: true,
-    start: false,
-    features: null,
-    console_mode: "默认 (tty)"
-  })
-   if (availableNodes.value.length > 0 && !formData.node) {
-        formData.node = availableNodes.value[0].node
-        handleNodeChange(formData.node)
-    } else if (formData.node) {
-        handleNodeChange(formData.node) // 刷新该节点资源
-    }
+  
+  Object.assign(formData, initialFormData())
+
+  if(!resetNode && currentNode) {
+      formData.node = currentNode;
+      formData.network.bridge = currentBridge; // 保留桥接网卡如果节点未变
+      // 触发一次资源加载，以防万一，或者依赖于已加载的资源
+      if(availableNodes.value.find(n => n.node === currentNode)) {
+          handleNodeChange(currentNode, true); // silent=true, 不清空依赖项
+      }
+  } else if (availableNodes.value.length > 0) {
+      formData.node = availableNodes.value[0].node
+      handleNodeChange(formData.node)
+  }
+
 }
 
 const getTaskStatusType = (status) => {
@@ -377,19 +402,23 @@ watch(() => backendStore.activeBackendId, () => {
     availableTemplates.value = []
     availableStorages.value = []
     availableNetworks.value = []
-    formData.node = ''
-    resetForm()
+    resetForm(true) // 重置包括节点选择
     fetchInitialData()
 })
 
 </script>
 
 <style scoped>
-div {
+.page-container {
   padding: 20px;
+  background-color: #fff;
+  border-radius: 4px;
+  box-shadow: 0 2px 12px 0 rgba(0,0,0,.1);
 }
 h2 {
   margin-bottom: 20px;
+  font-size: 1.5em;
+  color: #303133;
 }
 h4 {
   margin-top: 30px;
@@ -402,7 +431,7 @@ h4 {
 .el-form-item {
     margin-bottom: 22px;
 }
-.el-select {
+.el-select, .el-input-number {
     width: 100%;
 }
 </style>
