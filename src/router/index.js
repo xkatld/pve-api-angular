@@ -39,7 +39,12 @@ const router = createRouter({
 router.beforeEach((to, from, next) => {
   const authStore = useAuthStore()
   if (to.meta.requiresAuth && !authStore.activeBackendId) {
-    next({ name: 'BackendConfig' })
+    if (authStore.backends.length > 0 && !authStore.activeBackendId) {
+      authStore.setActiveBackend(authStore.backends[0].id)
+      next()
+    } else {
+      next({ name: 'BackendConfig' })
+    }
   } else {
     next()
   }
