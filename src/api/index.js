@@ -36,7 +36,7 @@ apiClient.interceptors.response.use(
   (response) => {
     const responseData = response.data
 
-    if (responseData && typeof responseData.success === 'boolean') {
+    if (responseData && typeof responseData.success === 'boolean' && responseData.hasOwnProperty('message')) {
       if (responseData.success === true) {
         if (responseData.message) {
           ElMessage.success(responseData.message)
@@ -47,8 +47,10 @@ apiClient.interceptors.response.use(
         ElMessage.error(errorMessage)
         return Promise.reject(new Error(errorMessage))
       }
+    } else if (response.config && (response.config.method === 'get' || response.config.method === 'GET')) {
+      return responseData
     } else {
-      ElMessage.warning('收到服务器的响应格式不符合预期')
+      ElMessage.warning('收到服务器的非GET请求响应格式不符合预期标准结构')
       return responseData.data !== undefined ? responseData.data : responseData
     }
   },
