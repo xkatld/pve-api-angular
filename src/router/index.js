@@ -7,28 +7,33 @@ import ConsoleView from '@/views/ConsoleView.vue'
 const routes = [
   {
     path: '/',
-    redirect: '/manage-backends'
+    redirect: '/manage-backends',
+    meta: { keepAlive: false }
   },
   {
     path: '/manage-backends',
     name: 'ManageBackends',
-    component: ManageBackendsView
+    component: ManageBackendsView,
+    meta: { keepAlive: true }
   },
   {
     path: '/containers',
     name: 'ContainerList',
-    component: ContainerListView
+    component: ContainerListView,
+    meta: { keepAlive: true }
   },
   {
     path: '/create-container',
     name: 'CreateContainer',
-    component: CreateContainerView
+    component: CreateContainerView,
+    meta: { keepAlive: false }
   },
   {
     path: '/console/:node/:vmid',
     name: 'ConsoleView',
     component: ConsoleView,
-    props: true
+    props: true,
+    meta: { keepAlive: false }
   }
 ]
 
