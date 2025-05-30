@@ -5,7 +5,7 @@
     </el-header>
     <el-container>
       <el-aside width="200px" style="background-color: #f4f4f5;">
-        <el-menu :default-openeds="['1']" router>
+        <el-menu :default-openeds="['1']" router :default-active="$route.path">
           <el-menu-item index="/manage-backends">
             <el-icon><Setting /></el-icon>
             <span>后端管理</span>
@@ -20,8 +20,13 @@
           </el-menu-item>
         </el-menu>
       </el-aside>
-      <el-main>
-        <router-view></router-view>
+      <el-main style="padding: 0;">
+        <router-view v-slot="{ Component }">
+            <keep-alive>
+                <component :is="Component" :key="$route.fullPath" v-if="$route.meta.keepAlive"/>
+            </keep-alive>
+            <component :is="Component" :key="$route.fullPath" v-if="!$route.meta.keepAlive"/>
+        </router-view>
       </el-main>
     </el-container>
   </el-container>
@@ -37,5 +42,13 @@ body {
 }
 .el-header {
   padding: 0 20px;
+  line-height: 60px;
+}
+.el-aside .el-menu {
+    height: calc(100vh - 60px);
+    border-right: none;
+}
+.el-main {
+    background-color: #eef0f3;
 }
 </style>
