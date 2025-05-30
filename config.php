@@ -1,6 +1,6 @@
 <?php
 define('ADMIN_USERNAME', 'admin');
-define('ADMIN_PASSWORD_HASH', password_hash('您的安全密码', PASSWORD_DEFAULT));
+define('ADMIN_PASSWORD_HASH', password_hash('password', PASSWORD_DEFAULT));
 
 $_SESSION['backend_servers'] = isset($_SESSION['backend_servers']) ? $_SESSION['backend_servers'] : [
     [
@@ -83,7 +83,7 @@ function get_selected_backend() {
             return $server;
         }
     }
-    // Fallback if selected_backend_id is stale
+    
     if (!empty($_SESSION['backend_servers'])) {
         $_SESSION['selected_backend_id'] = $_SESSION['backend_servers'][0]['id'];
         return $_SESSION['backend_servers'][0];
