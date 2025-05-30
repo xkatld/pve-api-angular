@@ -13,8 +13,32 @@ let term = null
 let socket = null
 let fitAddon = null
 
+async function getPveNodeIp(nodeNameFromRoute) {
+  try {
+    const nodesResponse = await apiService.getNodes()
+    if (nodesResponse.data && nodesResponse.data.success && Array.isArray(nodesResponse.data.data)) {
+      const pveNode = nodesResponse.data.data.find(n => n.node === nodeNameFromRoute)
+      if (pveNode && pveNode.ip) {
+        return pveNode.ip
+      } else if (pveNode) {
+        ElMessage.error(`节点 "${nodeNameFromRoute}" 的信息中未找到有效的 IP 地址。将尝试使用节点名称直接连接。`)
+        return nodeNameFromRoute
+      } else {
+        ElMessage.error(`在PVE节点列表中未找到名为 "${nodeNameFromRoute}" 的节点。将尝试使用节点名称直接连接。`)
+        return nodeNameFromRoute
+      }
+    } else {
+      ElMessage.error(`获取PVE节点列表失败或数据格式不正确: ${nodesResponse.data?.message || '未知错误'}。将尝试使用节点名称直接连接。`)
+      return nodeNameFromRoute
+    }
+  } catch (error) {
+    ElMessage.error(`获取PVE节点列表时发生错误: ${error.message || '未知错误'}。将尝试使用节点名称直接连接。`)
+    return nodeNameFromRoute
+  }
+}
+
 async function setupConsole() {
-  const node = route.params.node
+  const nodeNameFromRoute = route.params.node
   const vmid = route.params.vmid
 
   if (!terminalEl.value) {
@@ -22,26 +46,33 @@ async function setupConsole() {
     return
   }
 
+  const pveNodeIpOrHostname = await getPveNodeIp(nodeNameFromRoute)
+  if (!pveNodeIpOrHostname) {
+    ElMessage.error(`无法确定 PVE 节点 "${nodeNameFromRoute}" 的连接地址。`)
+    return
+  }
+  
   try {
-    const response = await apiService.getContainerConsoleTicket(node, vmid)
+    const ticketResponse = await apiService.getContainerConsoleTicket(nodeNameFromRoute, vmid)
 
-    if (!response.data || !response.data.success || !response.data.data) {
-      ElMessage.error(`获取控制台票据失败: ${response.data?.message || '未知错误'}`)
+    if (!ticketResponse.data || !ticketResponse.data.success || !ticketResponse.data.data) {
+      ElMessage.error(`获取控制台票据失败: ${ticketResponse.data?.message || '未知错误'}`)
       return
     }
 
-    const ticketData = response.data.data
-    if (!ticketData.ticket || !ticketData.port) {
-        ElMessage.error('票据数据不完整，缺少票据或端口信息')
+    const ticketData = ticketResponse.data.data
+    if (!ticketData.ticket || !ticketData.port || !ticketData.upid) {
+        ElMessage.error('票据数据不完整，缺少票据、端口或UPID信息')
         return
     }
     
     const wsProtocol = 'wss:'
-    const wsHost = node
+    const wsHost = pveNodeIpOrHostname
     const wsPort = ticketData.port
     const pveTicket = ticketData.ticket
+    const pveUpid = ticketData.upid
 
-    const websocketUrl = `${wsProtocol}//${wsHost}:${wsPort}/`
+    const websocketUrl = `${wsProtocol}//${wsHost}:${wsPort}/?vncticket=${encodeURIComponent(pveTicket)}&upid=${encodeURIComponent(pveUpid)}`
     
     term = new Terminal({
       cursorBlink: true,
@@ -58,7 +89,7 @@ async function setupConsole() {
     fitAddon = new FitAddon()
     term.loadAddon(fitAddon)
     
-    socket = new WebSocket(websocketUrl, [pveTicket])
+    socket = new WebSocket(websocketUrl)
 
     const attachAddon = new AttachAddon(socket)
     term.loadAddon(attachAddon)
@@ -67,25 +98,33 @@ async function setupConsole() {
     fitAddon.fit()
     term.focus()
 
+    socket.onopen = () => {
+        ElMessage.success(`已连接到节点 ${wsHost} 的控制台。`)
+    }
+
     socket.onclose = (event) => {
       if (event.code !== 1000) {
-        ElMessage.error(`控制台连接已断开 (代码: ${event.code}). 请检查PVE节点 "${wsHost}" 是否可访问，端口 ${wsPort} 是否开放，或网络连接。`)
+        ElMessage.error(`控制台连接已断开 (代码: ${event.code})。`)
       } else {
         ElMessage.info('控制台连接已关闭。')
       }
       if (term) {
-         term.write('\r\n\x1b[31m连接已关闭.\x1b[0m\r\n')
+         term.write(`\r\n\x1b[31m连接已关闭 (代码: ${event.code}).\x1b[0m\r\n`)
       }
     }
     socket.onerror = (error) => {
-      ElMessage.error('WebSocket 连接发生错误。请检查浏览器控制台获取更多信息。')
+      ElMessage.error('WebSocket 连接发生错误。详情请查看浏览器开发者控制台。')
       if (term) {
         term.write('\r\n\x1b[31mWebSocket 连接错误.\x1b[0m\r\n')
       }
     }
 
   } catch (error) {
-    ElMessage.error(`无法连接到控制台: ${error.message || '请检查后端API是否正确配置和运行'}`)
+    let errorMessage = error.message || '请检查后端API是否正确配置和运行'
+    if (error.name === 'SecurityError' && (wsProtocol === 'wss:' || websocketUrl.startsWith('wss:'))) {
+        errorMessage = 'WebSocket 安全连接失败。如果PVE使用自签名证书，您可能需要在浏览器中手动信任该证书，或确保PVE节点地址正确且证书有效。'
+    }
+    ElMessage.error(`无法连接到控制台: ${errorMessage}`)
   }
 }
 
@@ -119,14 +158,14 @@ onBeforeUnmount(() => {
   <div class="console-container">
     <div ref="terminalEl" class="terminal-instance"></div>
   </div>
-</template>
+</template
 
 <style scoped>
 .console-container {
   width: 100%;
-  height: calc(100vh - 60px);
+  height: calc(100vh - 60px); /* 减去导航栏等可能的高度 */
   padding: 5px;
-  background-color: #202020;
+  background-color: #202020; /* 深色背景以匹配终端 */
   box-sizing: border-box;
 }
 .terminal-instance {
