@@ -17,7 +17,7 @@ export const useAuthStore = defineStore('auth', () => {
     backend.id = Date.now().toString()
     backends.value.push(backend)
     localStorage.setItem('pveBackends', JSON.stringify(backends.value))
-    if (!activeBackendId.value) {
+    if (!activeBackendId.value || backends.value.length === 1) {
       setActiveBackend(backend.id)
     }
   }
@@ -45,8 +45,14 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   function clearAuth() {
-    activeBackendId.value = null
-    localStorage.removeItem('pveActiveBackendId')
+    localStorage.removeItem('pveActiveBackendId');
+    activeBackendId.value = null;
+
+    if (backends.value.length > 0) {
+        setActiveBackend(backends.value[0].id);
+    } else {
+         router.push('/config');
+    }
   }
 
   return {
