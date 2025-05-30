@@ -6,7 +6,7 @@ import { AttachAddon } from 'xterm-addon-attach'
 import { FitAddon } from 'xterm-addon-fit'
 import apiService from '@/services/apiService'
 import { ElMessage } from 'element-plus'
-import { usePveNodesStore } from '@/store/pveNodesStore'
+import { useBackendStore } from '@/store/backendStore'
 
 const route = useRoute()
 const terminalEl = ref(null)
@@ -17,29 +17,31 @@ let fitAddon = null
 async function setupConsole() {
   const nodeNameFromRoute = route.params.node
   const vmid = route.params.vmid
-  const pveNodesStore = usePveNodesStore()
+  
+  const backendStore = useBackendStore()
+  const activeBackend = backendStore.activeBackend
 
   if (!terminalEl.value) {
     ElMessage.error('终端元素尚未加载')
     return
   }
 
-  let pveNodeIpOrHostname = pveNodesStore.getNodeIp(nodeNameFromRoute)
+  if (!activeBackend) {
+    ElMessage.error('没有活动的后端配置。请先配置并选择一个后端服务。')
+    return
+  }
 
-  if (!pveNodeIpOrHostname) {
-    ElMessage.info(`正在尝试获取节点 "${nodeNameFromRoute}" 的IP信息...`)
-    await pveNodesStore.fetchNodes(true)
-    pveNodeIpOrHostname = pveNodesStore.getNodeIp(nodeNameFromRoute)
-
-    if (!pveNodeIpOrHostname) {
-      ElMessage.warn(`无法从节点列表中获取节点 "${nodeNameFromRoute}" 的有效IP地址。将尝试使用节点名称 "${nodeNameFromRoute}" 直接连接。请确保该名称可被正确解析。`)
-      pveNodeIpOrHostname = nodeNameFromRoute
+  let pveNodeIpOrHostname = null
+  if (activeBackend.pveNodes && Array.isArray(activeBackend.pveNodes)) {
+    const nodeConfig = activeBackend.pveNodes.find(n => n.name === nodeNameFromRoute)
+    if (nodeConfig && nodeConfig.ip) {
+      pveNodeIpOrHostname = nodeConfig.ip
     }
   }
-  
+
   if (!pveNodeIpOrHostname) {
-     ElMessage.error(`最终无法确定PVE节点 "${nodeNameFromRoute}" 的连接地址。`)
-     return
+    ElMessage.warn(`在当前后端配置中未找到节点 "${nodeNameFromRoute}" 的 IP 地址。将尝试使用节点名称 "${nodeNameFromRoute}" 直接连接。请确保该名称可被正确解析或在后端配置中提供其IP。`)
+    pveNodeIpOrHostname = nodeNameFromRoute
   }
   
   try {
