@@ -42,6 +42,15 @@ export default {
   getNodes() {
     return apiService.get('/api/v1/nodes')
   },
+  getNodeTemplates(node) {
+    return apiService.get(`/api/v1/nodes/${node}/templates`)
+  },
+  getNodeStorages(node) {
+    return apiService.get(`/api/v1/nodes/${node}/storages`)
+  },
+  getNodeNetworks(node) {
+    return apiService.get(`/api/v1/nodes/${node}/networks`)
+  },
   getContainers(node) {
     const params = node ? { node } : {}
     return apiService.get('/api/v1/containers', { params })
@@ -69,5 +78,8 @@ export default {
   },
   getTaskStatus(node, taskId) {
     return apiService.get(`/api/v1/tasks/${node}/${taskId}`)
+  },
+  getContainerConsoleTicket(node, vmid) {
+    return apiService.post(`/api/v1/containers/${node}/${vmid}/console`)
   }
 }
