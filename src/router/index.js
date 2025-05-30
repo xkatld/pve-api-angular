@@ -1,6 +1,8 @@
+// src/router/index.js
 import { createRouter, createWebHistory } from 'vue-router'
 import ManageBackendsView from '@/views/ManageBackendsView.vue'
 import ContainerListView from '@/views/ContainerListView.vue'
+import CreateContainerView from '@/views/CreateContainerView.vue' // 新增导入
 
 const routes = [
   {
@@ -16,6 +18,11 @@ const routes = [
     path: '/containers',
     name: 'ContainerList',
     component: ContainerListView
+  },
+  { // 新增路由
+    path: '/create-container',
+    name: 'CreateContainer',
+    component: CreateContainerView
   }
 ]
 
