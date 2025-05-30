@@ -2,18 +2,20 @@ import axios from 'axios'
 import { useBackendStore } from '@/store/backendStore'
 import { ElMessage } from 'element-plus'
 
-const apiService = axios.create()
+const apiService = axios.create({
+    timeout: 15000 
+})
 
 apiService.interceptors.request.use(
   config => {
     const backendStore = useBackendStore()
     const activeBackend = backendStore.activeBackend
-    if (activeBackend) {
+    if (activeBackend && activeBackend.url && activeBackend.apiKey) {
       config.baseURL = activeBackend.url.replace(/\/$/, "")
       config.headers['Authorization'] = `Bearer ${activeBackend.apiKey}`
     } else {
-      ElMessage.error('没有活动的后端服务器配置。请先配置后端服务器。')
-      return Promise.reject(new Error('没有活动的后端服务器配置'))
+      ElMessage.error('没有有效活动的后端服务器配置。请先配置并选择一个后端服务器。')
+      return Promise.reject(new Error('没有有效活动的后端服务器配置'))
     }
     return config
   },
@@ -25,15 +27,15 @@ apiService.interceptors.request.use(
 apiService.interceptors.response.use(
   response => response,
   error => {
-    let message = '请求失败'
+    let message = '请求发生错误'
     if (error.response) {
       message = error.response.data?.detail || error.response.data?.message || `错误 ${error.response.status}`
     } else if (error.request) {
-      message = '无法连接到服务器，请检查后端服务是否运行或网络连接。'
+      message = '无法连接到服务器，请检查后端服务是否运行、网络连接或后端URL配置是否正确。'
     } else {
       message = error.message
     }
-    ElMessage.error(message)
+    ElMessage.error({ message: message, duration: 5000, showClose: true })
     return Promise.reject(error)
   }
 )
