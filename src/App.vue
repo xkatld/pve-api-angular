@@ -14,6 +14,10 @@
             <el-icon><Cpu /></el-icon>
             <span>容器列表</span>
           </el-menu-item>
+          <el-menu-item index="/create-container">
+            <el-icon><Plus /></el-icon>
+            <span>创建容器</span>
+          </el-menu-item>
         </el-menu>
       </el-aside>
       <el-main>
