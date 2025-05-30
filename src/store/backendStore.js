@@ -12,10 +12,10 @@ export const useBackendStore = defineStore('backend', () => {
   function addBackend(backendData) {
     const newBackend = {
       id: Date.now().toString(),
-      name: backendData.name || `后端服务 #${backendList.value.length + 1}`,
-      url: backendData.url,
+      name: backendData.name || `后端配置 #${backendList.value.length + 1}`,
+      apiUrl: backendData.apiUrl,
       apiKey: backendData.apiKey,
-      pveNodes: Array.isArray(backendData.pveNodes) ? backendData.pveNodes : []
+      pveManagerUrl: backendData.pveManagerUrl
     }
     backendList.value.push(newBackend)
     saveToLocalStorage()
@@ -27,9 +27,13 @@ export const useBackendStore = defineStore('backend', () => {
   function updateBackend(backendId, updatedData) {
     const backendIndex = backendList.value.findIndex(b => b.id === backendId)
     if (backendIndex !== -1) {
+      // 保留 id 不变，更新其他字段
       backendList.value[backendIndex] = {
         ...backendList.value[backendIndex],
-        ...updatedData
+        name: updatedData.name !== undefined ? updatedData.name : backendList.value[backendIndex].name,
+        apiUrl: updatedData.apiUrl !== undefined ? updatedData.apiUrl : backendList.value[backendIndex].apiUrl,
+        apiKey: updatedData.apiKey !== undefined ? updatedData.apiKey : backendList.value[backendIndex].apiKey,
+        pveManagerUrl: updatedData.pveManagerUrl !== undefined ? updatedData.pveManagerUrl : backendList.value[backendIndex].pveManagerUrl,
       }
       saveToLocalStorage()
     }
