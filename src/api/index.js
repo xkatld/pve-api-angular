@@ -34,16 +34,35 @@ apiClient.interceptors.request.use(
 
 apiClient.interceptors.response.use(
   (response) => {
-    if (response.data && response.data.success === false) {
-       ElMessage.error(response.data.message || '操作失败');
-       return Promise.reject(new Error(response.data.message || '操作失败'));
+    const responseData = response.data
+
+    if (responseData && typeof responseData.success === 'boolean') {
+      if (responseData.success === true) {
+        if (responseData.message) {
+          ElMessage.success(responseData.message)
+        }
+        return responseData.data
+      } else {
+        const errorMessage = responseData.message || '操作失败'
+        ElMessage.error(errorMessage)
+        return Promise.reject(new Error(errorMessage))
+      }
+    } else {
+      ElMessage.warning('收到服务器的响应格式不符合预期')
+      return responseData.data !== undefined ? responseData.data : responseData
     }
-    return response.data.data !== undefined ? response.data.data : response.data;
   },
   (error) => {
-    const message = error.response?.data?.detail || error.message || '网络请求失败'
+    let message = '网络请求失败或发生未知错误'
+    if (error.response && error.response.data) {
+      message = error.response.data.message || error.response.data.detail || error.message || '服务器错误'
+    } else if (error.message) {
+      message = error.message
+    }
+
     ElMessage.error(message)
-    if (error.response?.status === 401) {
+
+    if (error.response && error.response.status === 401) {
       const authStore = useAuthStore()
       authStore.clearAuth()
       router.push('/config')
