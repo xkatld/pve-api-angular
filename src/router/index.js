@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import ManageBackendsView from '../views/ManageBackendsView.vue'
-import ContainerListView from '../views/ContainerListView.vue'
+import ManageBackendsView from '@/views/ManageBackendsView.vue'
+import ContainerListView from '@/views/ContainerListView.vue'
 
 const routes = [
   {
