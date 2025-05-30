@@ -10,18 +10,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['select_backend'])) {
     foreach ($backend_servers as $server) {
         if ($server['id'] === $new_selected_id) {
             $_SESSION['selected_backend_id'] = $new_selected_id;
-            $selected_backend_id = $new_selected_id; // Update for current page view
+            $selected_backend_id = $new_selected_id; 
             $found = true;
             break;
         }
     }
     if ($found) {
-        header("Location: dashboard.php"); // Refresh to apply selection globally via session
+        header("Location: dashboard.php"); 
         exit;
     }
 }
 
-$selected_backend = get_selected_backend(); // Get the updated selected backend
+$selected_backend = get_selected_backend(); 
 
 ?>
 
