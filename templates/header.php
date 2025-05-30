@@ -20,14 +20,14 @@ $selected_backend = get_selected_backend();
             <h1>Proxmox LXC Web 面板</h1>
             <nav>
                 <ul>
-                    <li><a href="dashboard.php" class="<?php echo $current_page === 'dashboard.php' ? 'active' : ''; ?>">仪表盘</a></li>
+                    <li><a href="../dashboard.php" class="<?php echo $current_page === 'dashboard.php' ? 'active' : ''; ?>">仪表盘</a></li>
                     <li><a href="manage_backends.php" class="<?php echo $current_page === 'manage_backends.php' ? 'active' : ''; ?>">后端管理</a></li>
                     <?php if ($selected_backend): ?>
                     <li><a href="nodes_list.php" class="<?php echo $current_page === 'nodes_list.php' ? 'active' : ''; ?>">节点列表</a></li>
                     <li><a href="containers_list.php" class="<?php echo $current_page === 'containers_list.php' ? 'active' : ''; ?>">容器列表</a></li>
                     <li><a href="create_container_form.php" class="<?php echo $current_page === 'create_container_form.php' ? 'active' : ''; ?>">创建容器</a></li>
                     <?php endif; ?>
-                    <li><a href="logout.php">退出登录</a></li>
+                    <li><a href="../logout.php">退出登录</a></li>
                 </ul>
             </nav>
         </div>
