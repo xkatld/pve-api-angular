@@ -38,7 +38,7 @@ const CreateContainerForm: React.FC = () => {
   const [storages, setStorages] = useState<NodeResource[]>([]);
   const [bridges, setBridges] = useState<NodeResource[]>([]);
   
-  const { notifyError, notifySuccess, setIsLoading } = useAppContext();
+  const { notifyError, notifySuccess, setIsLoading, notifyInfo } = useAppContext(); // 确保 notifyInfo 已解构
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -60,12 +60,23 @@ const CreateContainerForm: React.FC = () => {
       setIsLoading(false);
     };
     fetchData();
-  }, [notifyError, setIsLoading]);
+  }, [notifyError, setIsLoading]); // 移除了 notifySuccess 和 notifyInfo 因为它们在此 useEffect 中未使用
 
   useEffect(() => {
     if (formData.node) {
       const fetchNodeSpecificData = async () => {
         setIsLoading(true);
+        // 重置依赖于节点的特定数据，以避免旧数据残留
+        setTemplates([]);
+        setStorages([]);
+        setBridges([]);
+        setFormData(prev => ({
+            ...prev,
+            ostemplate: '',
+            storage: '',
+            network: { ...prev.network, bridge: '' }
+        }));
+
         try {
           const templatesRes = await getNodeTemplates(formData.node);
           if (templatesRes.success && templatesRes.data) setTemplates(templatesRes.data);
@@ -75,7 +86,7 @@ const CreateContainerForm: React.FC = () => {
           if (storagesRes.success && storagesRes.data) {
             const rootFsStorages = storagesRes.data.filter(s => s.content && s.content.includes('rootdir'));
             setStorages(rootFsStorages);
-            if (rootFsStorages.length > 0 && !formData.storage) {
+            if (rootFsStorages.length > 0) { // 总是尝试设置，即使formData.storage已有值，除非我们想保留旧选择
                 setFormData(prev => ({ ...prev, storage: rootFsStorages[0].storage }));
             }
           }
@@ -84,7 +95,7 @@ const CreateContainerForm: React.FC = () => {
           const networksRes = await getNodeNetworks(formData.node);
           if (networksRes.success && networksRes.data) {
             setBridges(networksRes.data);
-             if (networksRes.data.length > 0 && !formData.network.bridge) {
+             if (networksRes.data.length > 0) { // 总是尝试设置
                  setFormData(prev => ({ ...prev, network: {...prev.network, bridge: networksRes.data![0].iface} }));
              }
           } else {
@@ -111,13 +122,19 @@ const CreateContainerForm: React.FC = () => {
         ...prev,
         network: {
           ...prev.network,
-          [netField]: type === 'number' ? parseInt(value) || undefined : value
+          [netField]: type === 'number' ? (value === '' ? undefined : parseInt(value)) : value // 修正数字输入为空的情况
         }
       }));
-    } else {
+    } else if (name === "vmid" || name === "disk_size" || name === "cores" || name === "memory" || name === "swap" || name === "cpulimit") {
+        setFormData(prev => ({
+            ...prev,
+            [name]: value === '' ? undefined : parseInt(value) // 允许数字字段暂时为空，提交时再验证
+        }));
+    }
+    else {
       setFormData(prev => ({
         ...prev,
-        [name]: type === 'checkbox' ? checked : type === 'number' ? parseInt(value) : value
+        [name]: type === 'checkbox' ? checked : value
       }));
     }
   };
@@ -125,10 +142,20 @@ const CreateContainerForm: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+
+    // 验证必须的数字字段
+    if (!formData.vmid || formData.vmid < 100) {
+        notifyError("VMID 必须是一个大于等于100的数字。");
+        setIsLoading(false);
+        return;
+    }
+    // ... (添加其他必要字段的验证)
+
+
     try {
       const payload = {
           ...formData,
-          vmid: Number(formData.vmid),
+          vmid: Number(formData.vmid), // 已在上文处理 parseInt
           cores: Number(formData.cores),
           memory: Number(formData.memory),
           swap: Number(formData.swap),
@@ -144,7 +171,7 @@ const CreateContainerForm: React.FC = () => {
       const response = await createContainer(payload);
       if (response.success) {
         notifySuccess(response.message || '创建容器任务已启动');
-        if (response.data?.task_id) {
+        if (response.data?.task_id && notifyInfo) { // 检查 notifyInfo 是否存在
           notifyInfo(`任务 ID: ${response.data.task_id}. 您可以在任务状态页面跟踪进度。`);
         }
         navigate('/containers');
@@ -173,7 +200,7 @@ const CreateContainerForm: React.FC = () => {
         </div>
         <div>
           <label htmlFor="vmid" className={labelClass}>VMID</label>
-          <input type="number" name="vmid" id="vmid" value={formData.vmid} onChange={handleChange} className={inputClass} required min="100" />
+          <input type="number" name="vmid" id="vmid" value={formData.vmid === undefined ? '' : formData.vmid} onChange={handleChange} className={inputClass} required min="100" />
         </div>
         <div>
           <label htmlFor="hostname" className={labelClass}>主机名</label>
@@ -199,11 +226,11 @@ const CreateContainerForm: React.FC = () => {
         </div>
         <div>
           <label htmlFor="disk_size" className={labelClass}>磁盘大小 (GB)</label>
-          <input type="number" name="disk_size" id="disk_size" value={formData.disk_size} onChange={handleChange} className={inputClass} required min="1"/>
+          <input type="number" name="disk_size" id="disk_size" value={formData.disk_size === undefined ? '' : formData.disk_size} onChange={handleChange} className={inputClass} required min="1"/>
         </div>
         <div>
           <label htmlFor="cores" className={labelClass}>CPU核心数</label>
-          <input type="number" name="cores" id="cores" value={formData.cores} onChange={handleChange} className={inputClass} required min="1"/>
+          <input type="number" name="cores" id="cores" value={formData.cores === undefined ? '' : formData.cores} onChange={handleChange} className={inputClass} required min="1"/>
         </div>
         <div>
           <label htmlFor="cpulimit" className={labelClass}>CPU限制 (0为无限制)</label>
@@ -211,11 +238,11 @@ const CreateContainerForm: React.FC = () => {
         </div>
         <div>
           <label htmlFor="memory" className={labelClass}>内存 (MB)</label>
-          <input type="number" name="memory" id="memory" value={formData.memory} onChange={handleChange} className={inputClass} required min="64"/>
+          <input type="number" name="memory" id="memory" value={formData.memory === undefined ? '' : formData.memory} onChange={handleChange} className={inputClass} required min="64"/>
         </div>
         <div>
           <label htmlFor="swap" className={labelClass}>SWAP (MB)</label>
-          <input type="number" name="swap" id="swap" value={formData.swap} onChange={handleChange} className={inputClass} required min="0"/>
+          <input type="number" name="swap" id="swap" value={formData.swap === undefined ? '' : formData.swap} onChange={handleChange} className={inputClass} required min="0"/>
         </div>
       </div>
 
@@ -267,7 +294,7 @@ const CreateContainerForm: React.FC = () => {
         </div>
          <div>
           <label htmlFor="console_mode" className={labelClass}>控制台模式</label>
-          <select name="console_mode" id="console_mode" value={formData.console_mode ?? ''} onChange={handleChange} className={inputClass}>
+          <select name="console_mode" id="console_mode" value={formData.console_mode ?? ConsoleMode.DEFAULT_TTY} onChange={handleChange} className={inputClass}>
             {Object.values(ConsoleMode).map(mode => (
               <option key={mode} value={mode}>{mode}</option>
             ))}
