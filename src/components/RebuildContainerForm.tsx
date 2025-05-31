@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ContainerRebuildPayload, NetworkInterface, ConsoleMode, NodeResource, ContainerStatus } from '../types';
+import { ContainerRebuildPayload, NetworkInterface, ConsoleMode, NodeResource } from '../types'; //移除了 ContainerStatus
 import { rebuildContainer, getNodeTemplates, getNodeStorages, getNodeNetworks, getContainerStatus } from '../apiService';
 import { useAppContext } from '../AppContext';
 
@@ -15,7 +15,7 @@ const RebuildContainerForm: React.FC<RebuildContainerFormProps> = ({ node, vmid 
   const [storages, setStorages] = useState<NodeResource[]>([]);
   const [bridges, setBridges] = useState<NodeResource[]>([]);
   
-  const { notifyError, notifySuccess, setIsLoading } = useAppContext();
+  const { notifyError, notifySuccess, setIsLoading, notifyInfo } = useAppContext(); // 确保 notifyInfo 已解构
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -23,20 +23,17 @@ const RebuildContainerForm: React.FC<RebuildContainerFormProps> = ({ node, vmid 
       setIsLoading(true);
       try {
         const statusRes = await getContainerStatus(node,vmid);
-        // Pydantic schema `ContainerStatus` does not provide full config.
-        // We should ideally fetch full config for defaults, but API for that is not exposed in current backend.
-        // Setting some sensible defaults or leaving blank.
         setFormData({
             hostname: statusRes.name || `ct-${vmid}`,
             cores: 1, 
             memory: statusRes.maxmem ? Math.floor(statusRes.maxmem / (1024*1024)) : 512,
-            swap: 512, // Default, cannot get from status
-            disk_size: 8, // Default
-            network: { name: 'eth0', ip: 'dhcp', bridge: ''}, // Default
-            unprivileged: true, // Default
-            nesting: false, // Default
-            start: false, // Default
-            console_mode: ConsoleMode.DEFAULT_TTY, // Default
+            swap: 512, 
+            disk_size: 8, 
+            network: { name: 'eth0', ip: 'dhcp', bridge: ''}, 
+            unprivileged: true, 
+            nesting: false, 
+            start: false, 
+            console_mode: ConsoleMode.DEFAULT_TTY, 
         });
 
         const templatesRes = await getNodeTemplates(node);
@@ -47,7 +44,7 @@ const RebuildContainerForm: React.FC<RebuildContainerFormProps> = ({ node, vmid 
          if (storagesRes.success && storagesRes.data) {
             const rootFsStorages = storagesRes.data.filter(s => s.content && s.content.includes('rootdir'));
             setStorages(rootFsStorages);
-            if (rootFsStorages.length > 0 && !formData.storage) {
+            if (rootFsStorages.length > 0 && !formData.storage) { // 确保 formData.storage 不存在时才设置
                  setFormData(prev => ({ ...prev, storage: rootFsStorages[0].storage }));
             }
           }
@@ -56,7 +53,7 @@ const RebuildContainerForm: React.FC<RebuildContainerFormProps> = ({ node, vmid 
         const networksRes = await getNodeNetworks(node);
         if (networksRes.success && networksRes.data) {
           setBridges(networksRes.data);
-           if (networksRes.data.length > 0 && !formData.network?.bridge) {
+           if (networksRes.data.length > 0 && !formData.network?.bridge) { // 确保 formData.network.bridge 不存在时才设置
                setFormData(prev => ({ ...prev, network: {...(prev.network || {name: 'eth0', ip: 'dhcp'}), bridge: networksRes.data![0].iface} }));
            }
         } else {
@@ -69,7 +66,7 @@ const RebuildContainerForm: React.FC<RebuildContainerFormProps> = ({ node, vmid 
       setIsLoading(false);
     };
     fetchInitialData();
-  }, [node, vmid, setIsLoading, notifyError]);
+  }, [node, vmid, setIsLoading, notifyError]); // formData 从依赖项中移除，以避免无限循环，除非刻意要这样做
 
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -81,14 +78,20 @@ const RebuildContainerForm: React.FC<RebuildContainerFormProps> = ({ node, vmid 
       setFormData(prev => ({
         ...prev,
         network: {
-          ...(prev.network || {name: 'eth0', ip: 'dhcp', bridge: ''}), // Ensure network object exists
-          [netField]: type === 'number' ? parseInt(value) || undefined : value
+          ...(prev.network || {name: 'eth0', ip: 'dhcp', bridge: ''}),
+          [netField]: type === 'number' ? (value === '' ? undefined : parseInt(value)) : value // 修正数字输入为空的情况
         }
       }));
-    } else {
+    } else if (name === "disk_size" || name === "cores" || name === "cpulimit" || name === "memory" || name === "swap" ) {
+        setFormData(prev => ({
+            ...prev,
+            [name]: value === '' ? undefined : parseInt(value)
+        }));
+    }
+    else {
       setFormData(prev => ({
         ...prev,
-        [name]: type === 'checkbox' ? checked : type === 'number' ? parseInt(value) : value
+        [name]: type === 'checkbox' ? checked : value
       }));
     }
   };
@@ -98,7 +101,7 @@ const RebuildContainerForm: React.FC<RebuildContainerFormProps> = ({ node, vmid 
     setIsLoading(true);
     
     const { ostemplate, hostname, password, storage, disk_size, cores, memory, swap, network } = formData;
-    if (!ostemplate || !hostname || !password || !storage || !disk_size || !cores || !memory || !swap || !network?.bridge) {
+    if (!ostemplate || !hostname || !password || !storage || disk_size === undefined || cores === undefined || memory === undefined || swap === undefined || !network?.bridge) {
         notifyError("请填写所有必填字段（模板, 主机名, 密码, 存储, 磁盘, CPU, 内存, Swap, 网络桥接）。");
         setIsLoading(false);
         return;
@@ -130,7 +133,7 @@ const RebuildContainerForm: React.FC<RebuildContainerFormProps> = ({ node, vmid 
       const response = await rebuildContainer(node, vmid, payload);
       if (response.success) {
         notifySuccess(response.message || '重建容器任务已启动');
-        if (response.data?.task_id) {
+        if (response.data?.task_id && notifyInfo) { // 检查 notifyInfo 是否存在
           notifyInfo(`任务 ID: ${response.data.task_id}. 您可以在任务状态页面跟踪进度。`);
         }
         navigate(`/containers/${node}/${vmid}`);
@@ -177,11 +180,11 @@ const RebuildContainerForm: React.FC<RebuildContainerFormProps> = ({ node, vmid 
         </div>
         <div>
           <label htmlFor="disk_size" className={labelClass}>新磁盘大小 (GB)</label>
-          <input type="number" name="disk_size" id="disk_size" value={formData.disk_size || ''} onChange={handleChange} className={inputClass} required min="1"/>
+          <input type="number" name="disk_size" id="disk_size" value={formData.disk_size === undefined ? '' : formData.disk_size} onChange={handleChange} className={inputClass} required min="1"/>
         </div>
         <div>
           <label htmlFor="cores" className={labelClass}>新CPU核心数</label>
-          <input type="number" name="cores" id="cores" value={formData.cores || ''} onChange={handleChange} className={inputClass} required min="1"/>
+          <input type="number" name="cores" id="cores" value={formData.cores === undefined ? '' : formData.cores} onChange={handleChange} className={inputClass} required min="1"/>
         </div>
         <div>
           <label htmlFor="cpulimit" className={labelClass}>新CPU限制 (0为无限制)</label>
@@ -189,11 +192,11 @@ const RebuildContainerForm: React.FC<RebuildContainerFormProps> = ({ node, vmid 
         </div>
         <div>
           <label htmlFor="memory" className={labelClass}>新内存 (MB)</label>
-          <input type="number" name="memory" id="memory" value={formData.memory || ''} onChange={handleChange} className={inputClass} required min="64"/>
+          <input type="number" name="memory" id="memory" value={formData.memory === undefined ? '' : formData.memory} onChange={handleChange} className={inputClass} required min="64"/>
         </div>
         <div>
           <label htmlFor="swap" className={labelClass}>新SWAP (MB)</label>
-          <input type="number" name="swap" id="swap" value={formData.swap || ''} onChange={handleChange} className={inputClass} required min="0"/>
+          <input type="number" name="swap" id="swap" value={formData.swap === undefined ? '' : formData.swap} onChange={handleChange} className={inputClass} required min="0"/>
         </div>
       </div>
 
@@ -245,7 +248,7 @@ const RebuildContainerForm: React.FC<RebuildContainerFormProps> = ({ node, vmid 
         </div>
          <div>
           <label htmlFor="console_mode" className={labelClass}>控制台模式</label>
-          <select name="console_mode" id="console_mode" value={formData.console_mode ?? ''} onChange={handleChange} className={inputClass}>
+          <select name="console_mode" id="console_mode" value={formData.console_mode ?? ConsoleMode.DEFAULT_TTY} onChange={handleChange} className={inputClass}>
             {Object.values(ConsoleMode).map(mode => (
               <option key={mode} value={mode}>{mode}</option>
             ))}
