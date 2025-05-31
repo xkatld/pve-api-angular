@@ -54,7 +54,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const notifySuccess = (message: string) => toast.success(message);
   const notifyError = (message: string) => toast.error(message);
-  const notifyInfo = (message: string) => toast.info(message);
+  const notifyInfo = (message: string) => toast(message); // 修改此处
 
 
   return (
