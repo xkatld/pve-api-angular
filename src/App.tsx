@@ -1,5 +1,5 @@
 import { Routes, Route, Link, Navigate, useLocation } from 'react-router-dom';
-import { Home, Server, Settings, Container, HelpCircle, ListChecks } from 'lucide-react';
+import { Home, Server, Settings, Container, ListChecks } from 'lucide-react'; //移除了 HelpCircle
 import NodesPage from './pages/NodesPage';
 import ContainersPage from './pages/ContainersPage';
 import SettingsPage from './pages/SettingsPage';
