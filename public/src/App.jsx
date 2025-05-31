@@ -1,5 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ApiService } from './ApiService';
+import { Terminal } from 'xterm';
+import { AttachAddon } from 'xterm-addon-attach';
+import { FitAddon } from 'xterm-addon-fit';
+import 'xterm/css/xterm.css';
 
 const initialContainerFormData = {
   node: '',
@@ -52,6 +56,12 @@ function App() {
   const [consoleInfo, setConsoleInfo] = useState(null);
   const [showConsoleModal, setShowConsoleModal] = useState(false);
   const [serviceInfo, setServiceInfo] = useState(null);
+
+  const terminalRef = useRef(null);
+  const xtermInstanceRef = useRef(null);
+  const wsInstanceRef = useRef(null);
+  const fitAddonRef = useRef(null);
+
 
   const displayAlert = (message, type = 'error', duration = 5000) => {
     if (type === 'error') setError(message);
@@ -302,6 +312,87 @@ function App() {
       if (action !== 'status' && action !== 'console') setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (showConsoleModal && consoleInfo && terminalRef.current) {
+      if (xtermInstanceRef.current) {
+        xtermInstanceRef.current.dispose();
+      }
+      if (wsInstanceRef.current) {
+        wsInstanceRef.current.close();
+      }
+
+      const term = new Terminal({
+        cursorBlink: true,
+        rows: 25,
+        cols: 80,
+        fontSize: 14,
+        fontFamily: 'Consolas, "Courier New", monospace',
+        theme: {
+            background: '#1e1e1e',
+            foreground: '#d4d4d4',
+        }
+      });
+      xtermInstanceRef.current = term;
+
+      const fitAddon = new FitAddon();
+      fitAddonRef.current = fitAddon;
+      term.loadAddon(fitAddon);
+      
+      term.open(terminalRef.current);
+      fitAddon.fit();
+
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const PVE_API_PORT = 8006;
+      const wsUrl = `${protocol}//${consoleInfo.host}:${PVE_API_PORT}/api2/json/nodes/${consoleInfo.node}/lxc/${consoleInfo.vmid}/vncwebsocket?port=${consoleInfo.port}&vncticket=${encodeURIComponent(consoleInfo.ticket)}`;
+      
+      const ws = new WebSocket(wsUrl);
+      wsInstanceRef.current = ws;
+
+      const attachAddon = new AttachAddon(ws);
+      term.loadAddon(attachAddon);
+
+      ws.onopen = () => {
+        console.log('WebSocket 连接已打开');
+        fitAddon.fit();
+      };
+      ws.onclose = (event) => {
+        console.log('WebSocket 连接已关闭:', event);
+        term.writeln('');
+        term.writeln(`\x1b[31m连接已断开 (代码: ${event.code})\x1b[0m`);
+      };
+      ws.onerror = (error) => {
+        console.error('WebSocket 错误:', error);
+        term.writeln(`\x1b[31mWebSocket 连接错误\x1b[0m`);
+      };
+       const resizeObserver = new ResizeObserver(() => {
+        if (fitAddonRef.current) {
+            try {
+                fitAddonRef.current.fit();
+            } catch(e) {
+                console.warn("Fit addon error on resize", e)
+            }
+        }
+      });
+      if (terminalRef.current) {
+        resizeObserver.observe(terminalRef.current);
+      }
+
+      return () => {
+        resizeObserver.disconnect();
+        if (wsInstanceRef.current) {
+          wsInstanceRef.current.close();
+          wsInstanceRef.current = null;
+        }
+        if (xtermInstanceRef.current) {
+          xtermInstanceRef.current.dispose();
+          xtermInstanceRef.current = null;
+        }
+        fitAddonRef.current = null;
+      };
+    }
+  }, [showConsoleModal, consoleInfo]);
+
 
   const handleGetTaskStatus = async (e) => {
     e.preventDefault();
@@ -567,34 +658,16 @@ function App() {
 
   const renderConsoleModal = () => (
     <div className={`modal fade ${showConsoleModal ? 'show d-block' : ''}`} tabIndex="-1" style={{backgroundColor: showConsoleModal ? 'rgba(0,0,0,0.5)' : 'transparent'}}>
-      <div className="modal-dialog modal-lg">
-        <div className="modal-content">
+      <div className="modal-dialog modal-xl" style={{ maxWidth: '90vw' }}>
+        <div className="modal-content" style={{ height: '80vh' }}>
           <div className="modal-header">
-            <h5 className="modal-title">容器控制台信息 (VMID: {consoleInfo?.vmid})</h5>
+            <h5 className="modal-title">容器控制台 (VMID: {consoleInfo?.vmid}, 节点: {consoleInfo?.node})</h5>
             <button type="button" className="btn-close" onClick={() => setShowConsoleModal(false)}></button>
           </div>
-          <div className="modal-body">
+          <div className="modal-body" style={{ padding: '0', height: 'calc(100% - 56px)', overflow: 'hidden' }}>
             {consoleInfo ? (
-              <>
-                <p>请使用noVNC客户端或兼容工具连接到以下地址 (通常需要先通过Proxmox主机地址进行代理访问):</p>
-                <p><strong>Proxmox 服务器 (用于noVNC的主机):</strong> {consoleInfo.host}</p>
-                <p><strong>节点:</strong> {consoleInfo.node}</p>
-                <p><strong>端口 (vncproxy):</strong> {consoleInfo.port}</p>
-                <p><strong>用户:</strong> {consoleInfo.user}</p>
-                <p><strong>票据 (Ticket):</strong></p>
-                <textarea className="form-control" rows="4" value={consoleInfo.ticket} readOnly />
-                <p className="mt-2"><small>注意: 票据通常有有效期。您可能需要配置 Websockify 或使用 Proxmox VE 管理界面的 noVNC 功能来直接访问。</small></p>
-                <p className="mt-2">
-                    <strong>noVNC URL 示例:</strong> <br />
-                    <code>
-                        https://{consoleInfo.host}:8006/?console=lxc&vmid={consoleInfo.vmid}&node={consoleInfo.node}&vncticket={encodeURIComponent(consoleInfo.ticket)}
-                    </code>
-                </p>
-              </>
-            ) : <p>无法加载控制台信息。</p>}
-          </div>
-          <div className="modal-footer">
-            <button type="button" className="btn btn-secondary" onClick={() => setShowConsoleModal(false)}>关闭</button>
+              <div ref={terminalRef} style={{ width: '100%', height: '100%' }}></div>
+            ) : <p className="p-3">无法加载控制台信息。</p>}
           </div>
         </div>
       </div>
