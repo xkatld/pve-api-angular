@@ -75,47 +75,47 @@ export const createContainer = async (data: ContainerCreatePayload): Promise<Ope
   return response.data;
 };
 
-export const getContainerStatus = async (node: str, vmid: str): Promise<ContainerStatus> => {
+export const getContainerStatus = async (node: string, vmid: string): Promise<ContainerStatus> => {
   const response = await ensureApiClient().get<ContainerStatus>(`/containers/${node}/${vmid}/status`);
   return response.data;
 };
 
-export const startContainer = async (node: str, vmid: str): Promise<OperationResponse> => {
+export const startContainer = async (node: string, vmid: string): Promise<OperationResponse> => {
   const response = await ensureApiClient().post<OperationResponse>(`/containers/${node}/${vmid}/start`);
   return response.data;
 };
 
-export const stopContainer = async (node: str, vmid: str): Promise<OperationResponse> => {
+export const stopContainer = async (node: string, vmid: string): Promise<OperationResponse> => {
   const response = await ensureApiClient().post<OperationResponse>(`/containers/${node}/${vmid}/stop`);
   return response.data;
 };
 
-export const shutdownContainer = async (node: str, vmid: str): Promise<OperationResponse> => {
+export const shutdownContainer = async (node: string, vmid: string): Promise<OperationResponse> => {
   const response = await ensureApiClient().post<OperationResponse>(`/containers/${node}/${vmid}/shutdown`);
   return response.data;
 };
 
-export const rebootContainer = async (node: str, vmid: str): Promise<OperationResponse> => {
+export const rebootContainer = async (node: string, vmid: string): Promise<OperationResponse> => {
   const response = await ensureApiClient().post<OperationResponse>(`/containers/${node}/${vmid}/reboot`);
   return response.data;
 };
 
-export const deleteContainer = async (node: str, vmid: str): Promise<OperationResponse> => {
+export const deleteContainer = async (node: string, vmid: string): Promise<OperationResponse> => {
   const response = await ensureApiClient().delete<OperationResponse>(`/containers/${node}/${vmid}`);
   return response.data;
 };
 
-export const rebuildContainer = async (node: str, vmid: str, data: ContainerRebuildPayload): Promise<OperationResponse> => {
+export const rebuildContainer = async (node: string, vmid: string, data: ContainerRebuildPayload): Promise<OperationResponse> => {
   const response = await ensureApiClient().post<OperationResponse>(`/containers/${node}/${vmid}/rebuild`, data);
   return response.data;
 };
 
-export const getContainerConsole = async (node: str, vmid: str): Promise<ConsoleApiResponse> => {
+export const getContainerConsole = async (node: string, vmid: string): Promise<ConsoleApiResponse> => {
   const response = await ensureApiClient().post<ConsoleApiResponse>(`/containers/${node}/${vmid}/console`);
   return response.data;
 };
 
-export const getTaskStatus = async (node: str, taskId: str): Promise<OperationResponse<TaskStatusInfo>> => {
+export const getTaskStatus = async (node: string, taskId: string): Promise<OperationResponse<TaskStatusInfo>> => {
   const response = await ensureApiClient().get<OperationResponse<TaskStatusInfo>>(`/tasks/${node}/${taskId}`);
   return response.data;
 };
