@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ApiService } from './ApiService';
-import { Terminal } from 'xterm';
-import { AttachAddon } from 'xterm-addon-attach';
-import { FitAddon } from 'xterm-addon-fit';
+import RFB from '@novnc/novnc/core/rfb';
 import 'xterm/css/xterm.css';
+
 
 const initialContainerFormData = {
   node: '',
@@ -57,10 +56,8 @@ function App() {
   const [showConsoleModal, setShowConsoleModal] = useState(false);
   const [serviceInfo, setServiceInfo] = useState(null);
 
-  const terminalRef = useRef(null);
-  const xtermInstanceRef = useRef(null);
-  const wsInstanceRef = useRef(null);
-  const fitAddonRef = useRef(null);
+  const novncCanvasRef = useRef(null);
+  const rfbInstanceRef = useRef(null);
 
 
   const displayAlert = (message, type = 'error', duration = 5000) => {
@@ -314,81 +311,52 @@ function App() {
   };
 
   useEffect(() => {
-    if (showConsoleModal && consoleInfo && terminalRef.current) {
-      if (xtermInstanceRef.current) {
-        xtermInstanceRef.current.dispose();
+    if (showConsoleModal && consoleInfo && novncCanvasRef.current) {
+      if (rfbInstanceRef.current) {
+        rfbInstanceRef.current.disconnect();
+        rfbInstanceRef.current = null;
       }
-      if (wsInstanceRef.current) {
-        wsInstanceRef.current.close();
-      }
-
-      const term = new Terminal({
-        cursorBlink: true,
-        rows: 25,
-        cols: 80,
-        fontSize: 14,
-        fontFamily: 'Consolas, "Courier New", monospace',
-        theme: {
-            background: '#1e1e1e',
-            foreground: '#d4d4d4',
-        }
-      });
-      xtermInstanceRef.current = term;
-
-      const fitAddon = new FitAddon();
-      fitAddonRef.current = fitAddon;
-      term.loadAddon(fitAddon);
-      
-      term.open(terminalRef.current);
-      fitAddon.fit();
 
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const PVE_API_PORT = 8006;
+      const PVE_API_PORT = 8006; 
       const wsUrl = `${protocol}//${consoleInfo.host}:${PVE_API_PORT}/api2/json/nodes/${consoleInfo.node}/lxc/${consoleInfo.vmid}/vncwebsocket?port=${consoleInfo.port}&vncticket=${encodeURIComponent(consoleInfo.ticket)}`;
-      
-      const ws = new WebSocket(wsUrl);
-      wsInstanceRef.current = ws;
 
-      const attachAddon = new AttachAddon(ws);
-      term.loadAddon(attachAddon);
+      const rfb = new RFB(novncCanvasRef.current, wsUrl, {
+        credentials: { password: consoleInfo.ticket } 
+      });
 
-      ws.onopen = () => {
-        console.log('WebSocket 连接已打开');
-        fitAddon.fit();
-      };
-      ws.onclose = (event) => {
-        console.log('WebSocket 连接已关闭:', event);
-        term.writeln('');
-        term.writeln(`\x1b[31m连接已断开 (代码: ${event.code})\x1b[0m`);
-      };
-      ws.onerror = (error) => {
-        console.error('WebSocket 错误:', error);
-        term.writeln(`\x1b[31mWebSocket 连接错误\x1b[0m`);
-      };
-       const resizeObserver = new ResizeObserver(() => {
-        if (fitAddonRef.current) {
-            try {
-                fitAddonRef.current.fit();
-            } catch(e) {
-                console.warn("Fit addon error on resize", e)
+      rfb.addEventListener("connect", () => {
+        console.log("noVNC 已连接");
+        novncCanvasRef.current.style.display = "block"; 
+      });
+
+      rfb.addEventListener("disconnect", (event) => {
+        console.log("noVNC 已断开:", event.detail);
+        if (novncCanvasRef.current) {
+            novncCanvasRef.current.style.display = "none";
+            const ctx = novncCanvasRef.current.getContext('2d');
+            if (ctx) {
+                ctx.clearRect(0,0, novncCanvasRef.current.width, novncCanvasRef.current.height);
+                ctx.font = "16px Arial";
+                ctx.fillStyle = "black";
+                ctx.textAlign = "center";
+                ctx.fillText("连接已断开。请关闭并重试。", novncCanvasRef.current.width / 2, novncCanvasRef.current.height / 2);
             }
         }
       });
-      if (terminalRef.current) {
-        resizeObserver.observe(terminalRef.current);
-      }
+       rfb.addEventListener("credentialsrequired", () => {
+        console.log("noVNC 需要凭据 (使用票据作为密码)");
+        rfb.sendCredentials({ password: consoleInfo.ticket });
+      });
+
+
+      rfbInstanceRef.current = rfb;
 
       return () => {
-        resizeObserver.disconnect();
-        if (wsInstanceRef.current) {
-          wsInstanceRef.current.close();
-          wsInstanceRef.current = null;
+        if (rfbInstanceRef.current) {
+          rfbInstanceRef.current.disconnect();
+          rfbInstanceRef.current = null;
         }
-        if (xtermInstanceRef.current) {
-          xtermInstanceRef.current.dispose();
-          xtermInstanceRef.current = null;
-        }
-        fitAddonRef.current = null;
       };
     }
   }, [showConsoleModal, consoleInfo]);
@@ -658,16 +626,25 @@ function App() {
 
   const renderConsoleModal = () => (
     <div className={`modal fade ${showConsoleModal ? 'show d-block' : ''}`} tabIndex="-1" style={{backgroundColor: showConsoleModal ? 'rgba(0,0,0,0.5)' : 'transparent'}}>
-      <div className="modal-dialog modal-xl" style={{ maxWidth: '90vw' }}>
-        <div className="modal-content" style={{ height: '80vh' }}>
+      <div className="modal-dialog modal-xl" style={{ maxWidth: '90vw', minWidth: '800px' }}>
+        <div className="modal-content" style={{ height: '80vh', minHeight: '600px' }}>
           <div className="modal-header">
-            <h5 className="modal-title">容器控制台 (VMID: {consoleInfo?.vmid}, 节点: {consoleInfo?.node})</h5>
-            <button type="button" className="btn-close" onClick={() => setShowConsoleModal(false)}></button>
+            <h5 className="modal-title">noVNC 控制台 (VMID: {consoleInfo?.vmid}, 节点: {consoleInfo?.node})</h5>
+            <button type="button" className="btn-close" onClick={() => {
+              setShowConsoleModal(false);
+              if (rfbInstanceRef.current) {
+                rfbInstanceRef.current.disconnect();
+                rfbInstanceRef.current = null;
+              }
+              setConsoleInfo(null);
+            }}></button>
           </div>
-          <div className="modal-body" style={{ padding: '0', height: 'calc(100% - 56px)', overflow: 'hidden' }}>
+          <div className="modal-body" style={{ padding: '0', height: 'calc(100% - 56px)', overflow: 'hidden', background: '#DDD' }}>
             {consoleInfo ? (
-              <div ref={terminalRef} style={{ width: '100%', height: '100%' }}></div>
+              <div ref={novncCanvasRef} style={{ width: '100%', height: '100%', display: 'none' }}>
+              </div>
             ) : <p className="p-3">无法加载控制台信息。</p>}
+             {!consoleInfo && showConsoleModal && <p className="p-3">正在加载控制台...</p>}
           </div>
         </div>
       </div>
