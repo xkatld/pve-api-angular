@@ -1,8 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { ApiService } from './ApiService';
-import RFB from '@novnc/novnc/lib/rfb.js';
-import 'xterm/css/xterm.css';
-
 
 const initialContainerFormData = {
   node: '',
@@ -55,10 +52,7 @@ function App() {
   const [consoleInfo, setConsoleInfo] = useState(null);
   const [showConsoleModal, setShowConsoleModal] = useState(false);
   const [serviceInfo, setServiceInfo] = useState(null);
-
-  const novncCanvasRef = useRef(null);
-  const rfbInstanceRef = useRef(null);
-
+  const [pveConsoleUrl, setPveConsoleUrl] = useState('');
 
   const displayAlert = (message, type = 'error', duration = 5000) => {
     if (type === 'error') setError(message);
@@ -123,7 +117,6 @@ function App() {
     }
   }, [apiKey, currentView, selectedNode, fetchData]);
 
-
   const fetchNodeDetails = async (nodeName) => {
     if (!apiKey || !nodeName) return;
     setIsLoading(true);
@@ -183,7 +176,6 @@ function App() {
     else dataToSubmit.network.vlan = parseInt(dataToSubmit.network.vlan);
     if (dataToSubmit.network.rate === '' || dataToSubmit.network.rate === null) delete dataToSubmit.network.rate;
     else dataToSubmit.network.rate = parseInt(dataToSubmit.network.rate);
-
 
     try {
       let response;
@@ -268,7 +260,6 @@ function App() {
     }
   }, [containerFormData.node, showContainerModal]);
 
-
   const handleContainerAction = async (node, vmid, action) => {
     if (!apiKey) {
       displayAlert('请输入 API 密钥');
@@ -291,12 +282,16 @@ function App() {
             displayAlert(JSON.stringify(response.data || response, null, 2), 'success');
             setIsLoading(false); return;
         case 'console':
-            response = await ApiService.getContainerConsole(node, vmid, apiKey);
-            if (response.success && response.data) {
-              setConsoleInfo({...response.data, vmid: vmid});
+            const pveApiResponse = await ApiService.getContainerConsole(node, vmid, apiKey);
+            if (pveApiResponse.success && pveApiResponse.data) {
+              const PVE_HOST = pveApiResponse.data.host; 
+              const PVE_PORT = 8006;
+              const consoleUrl = `https://${PVE_HOST}:${PVE_PORT}/?console=lxc&vmid=${vmid}&node=${node}&cmd=&xtermjs=1`;
+              setPveConsoleUrl(consoleUrl);
+              setConsoleInfo(pveApiResponse.data); 
               setShowConsoleModal(true);
             } else {
-              displayAlert(response.message || '获取控制台信息失败');
+              displayAlert(pveApiResponse.message || '获取控制台信息失败');
             }
             setIsLoading(false); return;
         default: throw new Error('未知操作');
@@ -309,58 +304,6 @@ function App() {
       if (action !== 'status' && action !== 'console') setIsLoading(false);
     }
   };
-
-  useEffect(() => {
-    if (showConsoleModal && consoleInfo && novncCanvasRef.current) {
-      if (rfbInstanceRef.current) {
-        rfbInstanceRef.current.disconnect();
-        rfbInstanceRef.current = null;
-      }
-
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const PVE_API_PORT = 8006; 
-      const wsUrl = `${protocol}//${consoleInfo.host}:${PVE_API_PORT}/api2/json/nodes/${consoleInfo.node}/lxc/${consoleInfo.vmid}/vncwebsocket?port=${consoleInfo.port}&vncticket=${encodeURIComponent(consoleInfo.ticket)}`;
-
-      const rfb = new RFB(novncCanvasRef.current, wsUrl, {
-        credentials: { password: consoleInfo.ticket } 
-      });
-
-      rfb.addEventListener("connect", () => {
-        console.log("noVNC 已连接");
-        novncCanvasRef.current.style.display = "block"; 
-      });
-
-      rfb.addEventListener("disconnect", (event) => {
-        console.log("noVNC 已断开:", event.detail);
-        if (novncCanvasRef.current) {
-            novncCanvasRef.current.style.display = "none";
-            const ctx = novncCanvasRef.current.getContext('2d');
-            if (ctx) {
-                ctx.clearRect(0,0, novncCanvasRef.current.width, novncCanvasRef.current.height);
-                ctx.font = "16px Arial";
-                ctx.fillStyle = "black";
-                ctx.textAlign = "center";
-                ctx.fillText("连接已断开。请关闭并重试。", novncCanvasRef.current.width / 2, novncCanvasRef.current.height / 2);
-            }
-        }
-      });
-       rfb.addEventListener("credentialsrequired", () => {
-        console.log("noVNC 需要凭据 (使用票据作为密码)");
-        rfb.sendCredentials({ password: consoleInfo.ticket });
-      });
-
-
-      rfbInstanceRef.current = rfb;
-
-      return () => {
-        if (rfbInstanceRef.current) {
-          rfbInstanceRef.current.disconnect();
-          rfbInstanceRef.current = null;
-        }
-      };
-    }
-  }, [showConsoleModal, consoleInfo]);
-
 
   const handleGetTaskStatus = async (e) => {
     e.preventDefault();
@@ -624,27 +567,29 @@ function App() {
     </div>
   );
 
-  const renderConsoleModal = () => (
+ const renderConsoleModal = () => (
     <div className={`modal fade ${showConsoleModal ? 'show d-block' : ''}`} tabIndex="-1" style={{backgroundColor: showConsoleModal ? 'rgba(0,0,0,0.5)' : 'transparent'}}>
       <div className="modal-dialog modal-xl" style={{ maxWidth: '90vw', minWidth: '800px' }}>
-        <div className="modal-content" style={{ height: '80vh', minHeight: '600px' }}>
+        <div className="modal-content" style={{ height: '80vh', minHeight: '600px', display: 'flex', flexDirection: 'column' }}>
           <div className="modal-header">
-            <h5 className="modal-title">noVNC 控制台 (VMID: {consoleInfo?.vmid}, 节点: {consoleInfo?.node})</h5>
+            <h5 className="modal-title">Proxmox VE 控制台 (VMID: {consoleInfo?.vmid}, 节点: {consoleInfo?.node})</h5>
             <button type="button" className="btn-close" onClick={() => {
               setShowConsoleModal(false);
-              if (rfbInstanceRef.current) {
-                rfbInstanceRef.current.disconnect();
-                rfbInstanceRef.current = null;
-              }
+              setPveConsoleUrl(''); 
               setConsoleInfo(null);
             }}></button>
           </div>
-          <div className="modal-body" style={{ padding: '0', height: 'calc(100% - 56px)', overflow: 'hidden', background: '#DDD' }}>
-            {consoleInfo ? (
-              <div ref={novncCanvasRef} style={{ width: '100%', height: '100%', display: 'none' }}>
-              </div>
-            ) : <p className="p-3">无法加载控制台信息。</p>}
-             {!consoleInfo && showConsoleModal && <p className="p-3">正在加载控制台...</p>}
+          <div className="modal-body" style={{ padding: '0', flexGrow: 1, overflow: 'hidden' }}>
+            {pveConsoleUrl ? (
+              <iframe 
+                src={pveConsoleUrl} 
+                title={`Proxmox Console ${consoleInfo?.vmid}`}
+                style={{ width: '100%', height: '100%', border: 'none' }}
+                sandbox="allow-forms allow-modals allow-pointer-lock allow-popups allow-same-origin allow-scripts allow-top-navigation"
+              ></iframe>
+            ) : (
+              showConsoleModal && <p className="p-3 text-center" style={{paddingTop: '20%'}}>正在生成控制台URL...</p>
+            )}
           </div>
         </div>
       </div>
