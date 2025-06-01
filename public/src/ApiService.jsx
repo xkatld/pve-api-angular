@@ -62,4 +62,12 @@ export const ApiService = {
 
   getServiceStatus: (apiKey) => request('/', 'GET', null, apiKey),
   getHealthCheck: (apiKey) => request('/health', 'GET', null, apiKey),
+
+  resyncNatRules: (apiKey) => request(`/nat/rules/resync`, 'POST', null, apiKey),
+  createNatRule: (node, vmid, data, apiKey) => request(`/nodes/${node}/lxc/${vmid}/nat`, 'POST', data, apiKey),
+  getNatRulesForContainer: (node, vmid, apiKey, skip = 0, limit = 100) => request(`/nodes/${node}/lxc/${vmid}/nat?skip=${skip}&limit=${limit}`, 'GET', null, apiKey),
+  getAllNatRules: (apiKey, skip = 0, limit = 100) => request(`/nat/rules?skip=${skip}&limit=${limit}`, 'GET', null, apiKey),
+  getNatRuleDetails: (ruleId, apiKey) => request(`/nat/rules/${ruleId}`, 'GET', null, apiKey),
+  updateNatRule: (ruleId, data, apiKey) => request(`/nat/rules/${ruleId}`, 'PUT', data, apiKey),
+  deleteNatRule: (ruleId, apiKey) => request(`/nat/rules/${ruleId}`, 'DELETE', null, apiKey),
 };
