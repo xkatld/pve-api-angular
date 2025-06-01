@@ -28,6 +28,16 @@ const initialContainerFormData = {
   console_mode: '默认 (tty)',
 };
 
+const initialNatRuleFormData = {
+  node: '',
+  vmid: '',
+  host_port: '',
+  container_port: '',
+  protocol: 'tcp',
+  description: '',
+  enabled: true,
+};
+
 function App() {
   const [apiKey, setApiKey] = useState(localStorage.getItem('pveApiKey') || '');
   const [nodes, setNodes] = useState([]);
@@ -54,6 +64,12 @@ function App() {
   const [serviceInfo, setServiceInfo] = useState(null);
   const [pveConsoleUrl, setPveConsoleUrl] = useState('');
 
+  const [natRules, setNatRules] = useState([]);
+  const [showNatRuleModal, setShowNatRuleModal] = useState(false);
+  const [natRuleFormData, setNatRuleFormData] = useState(initialNatRuleFormData);
+  const [isEditNatRuleMode, setIsEditNatRuleMode] = useState(false);
+  const [currentNatRuleId, setCurrentNatRuleId] = useState(null);
+
   const displayAlert = (message, type = 'error', duration = 5000) => {
     if (type === 'error') setError(message);
     if (type === 'success') setSuccessMessage(message);
@@ -70,6 +86,7 @@ function App() {
     if (!newApiKey) {
         setNodes([]);
         setContainers([]);
+        setNatRules([]);
         setNodeResources({ templates: [], storages: [], networks: [] });
         setServiceInfo(null);
         displayAlert('API密钥已清除，请输入新的API密钥以继续操作。', 'info');
@@ -86,11 +103,16 @@ function App() {
     if (showError) setError(null);
     try {
       const result = await serviceCall(apiKey);
-      setter(result.data || (Array.isArray(result.containers) ? result.containers : result));
-      if (result.message && result.success && showError) displayAlert(result.message, 'success');
+      if (result.success === false) {
+        throw result;
+      }
+      setter(result.data || (Array.isArray(result.containers) ? result.containers : (Array.isArray(result) ? result : result)));
+      if (result.message && result.success !== false && showError) displayAlert(result.message, 'success');
     } catch (err) {
       if (showError) displayAlert(err.detail || err.message || '发生未知错误');
-      setter(Array.isArray(setter([])) ? [] : null);
+      if (typeof setter === 'function') {
+         setter( prev => Array.isArray(prev) ? [] : null);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -101,21 +123,26 @@ function App() {
       fetchData(ApiService.getServiceStatus, setServiceInfo, '获取服务状态...', false);
       if (currentView === 'nodes') {
         fetchData(ApiService.getNodes, setNodes, '正在加载节点...');
+      } else if (currentView === 'containers') {
+        fetchData((key) => ApiService.getContainers(key, selectedNode || null), setContainers, '正在加载容器...');
+      } else if (currentView === 'natManagement') {
+        fetchData(ApiService.getAllNatRules, setNatRules, '正在加载NAT规则...');
+        if (nodes.length === 0) {
+            fetchData(ApiService.getNodes, setNodes, '正在加载节点...', false);
+        }
       }
     } else {
       setNodes([]);
       setContainers([]);
+      setNatRules([]);
       setNodeResources({ templates: [], storages: [], networks: [] });
       setServiceInfo(null);
-      displayAlert('请输入 API 密钥以开始使用', 'info', 10000);
+      if (currentView !== 'natManagement' || (currentView === 'natManagement' && !apiKey)) {
+        displayAlert('请输入 API 密钥以开始使用', 'info', 10000);
+      }
     }
-  }, [apiKey, currentView, fetchData]);
+  }, [apiKey, currentView, selectedNode, fetchData, nodes.length]);
 
-  useEffect(() => {
-    if (apiKey && currentView === 'containers') {
-        fetchData((key) => ApiService.getContainers(key, selectedNode || null), setContainers, '正在加载容器...');
-    }
-  }, [apiKey, currentView, selectedNode, fetchData]);
 
   const fetchNodeDetails = async (nodeName) => {
     if (!apiKey || !nodeName) return;
@@ -225,6 +252,7 @@ function App() {
     setRebuildVmid(ct.vmid);
     setRebuildNode(ct.node);
     fetchNodeDetails(ct.node);
+
     setContainerFormData({
       node: ct.node,
       vmid: ct.vmid,
@@ -236,7 +264,7 @@ function App() {
       cores: ct.maxcpu || 1,
       cpulimit: null,
       memory: Math.round((ct.maxmem || 536870912) / (1024 * 1024)),
-      swap: Math.round((ct.maxswap || 536870912) / (1024 * 1024)),
+      swap: Math.round((ct.maxswap || 536870912) / (1024 * 1024)), // Assuming maxswap exists or default
       network: {
         name: 'eth0',
         bridge: 'vmbr0',
@@ -285,7 +313,7 @@ function App() {
             const pveApiResponse = await ApiService.getContainerConsole(node, vmid, apiKey);
             if (pveApiResponse.success && pveApiResponse.data) {
               const PVE_HOST = pveApiResponse.data.host; 
-              const PVE_PORT = 8006;
+              const PVE_PORT = 8006; 
               const consoleUrl = `https://${PVE_HOST}:${PVE_PORT}/?console=lxc&vmid=${vmid}&node=${node}&cmd=&xtermjs=1`;
               setPveConsoleUrl(consoleUrl);
               setConsoleInfo(pveApiResponse.data); 
@@ -316,6 +344,140 @@ function App() {
         return;
     }
     fetchData((key) => ApiService.getTaskStatus(taskNode, taskId, key), setTaskDetails, '正在获取任务状态...');
+  };
+
+  const handleNatRuleFormChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setNatRuleFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : (type === 'number' ? (value === '' ? '' : parseInt(value)) : value)
+    }));
+  };
+
+  const openCreateNatRuleModal = () => {
+    if (!apiKey) {
+      displayAlert('请输入 API 密钥后操作');
+      return;
+    }
+    if (nodes.length === 0) {
+        fetchData(ApiService.getNodes, setNodes, '加载节点中...', true)
+          .then(() => {
+             if (nodes.length > 0) setNatRuleFormData(prev => ({...initialNatRuleFormData, node: nodes[0].node}));
+          });
+    } else {
+        setNatRuleFormData(prev => ({...initialNatRuleFormData, node: nodes[0].node}));
+    }
+    setIsEditNatRuleMode(false);
+    setCurrentNatRuleId(null);
+    setShowNatRuleModal(true);
+  };
+
+  const openEditNatRuleModal = (rule) => {
+    if (!apiKey) {
+      displayAlert('请输入 API 密钥后操作');
+      return;
+    }
+    setIsEditNatRuleMode(true);
+    setCurrentNatRuleId(rule.id);
+    setNatRuleFormData({
+      node: rule.node,
+      vmid: rule.vmid,
+      host_port: rule.host_port,
+      container_port: rule.container_port,
+      protocol: rule.protocol,
+      description: rule.description || '',
+      enabled: rule.enabled,
+    });
+    setShowNatRuleModal(true);
+  };
+
+  const handleCreateOrUpdateNatRule = async (e) => {
+    e.preventDefault();
+    if (!apiKey) {
+      displayAlert('请输入 API 密钥');
+      return;
+    }
+    setIsLoading(true);
+    const { node, vmid, host_port, container_port, protocol, description, enabled } = natRuleFormData;
+    
+    if (!host_port || !container_port) {
+        displayAlert('主机端口和容器端口不能为空。', 'error');
+        setIsLoading(false);
+        return;
+    }
+
+    try {
+      let response;
+      if (isEditNatRuleMode) {
+        const updateData = { host_port, container_port, protocol, description, enabled };
+        response = await ApiService.updateNatRule(currentNatRuleId, updateData, apiKey);
+      } else {
+        if (!node || !vmid) {
+             displayAlert('创建NAT规则时，节点和VMID不能为空。', 'error');
+             setIsLoading(false);
+             return;
+        }
+        const createData = { host_port, container_port, protocol, description };
+        response = await ApiService.createNatRule(node, vmid, createData, apiKey);
+      }
+
+      if (response.success === false) {
+        throw response;
+      }
+      displayAlert(response.message || (isEditNatRuleMode ? 'NAT规则更新成功' : 'NAT规则创建成功'), 'success');
+      setShowNatRuleModal(false);
+      fetchData(ApiService.getAllNatRules, setNatRules, '刷新NAT规则列表...');
+    } catch (err) {
+      displayAlert(err.detail || err.message || (isEditNatRuleMode ? '更新NAT规则失败' : '创建NAT规则失败'));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeleteNatRule = async (ruleId) => {
+    if (!apiKey) {
+      displayAlert('请输入 API 密钥');
+      return;
+    }
+    if (!window.confirm(`确定要删除 NAT 规则 ID ${ruleId} 吗？`)) {
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const response = await ApiService.deleteNatRule(ruleId, apiKey);
+      if (response.success === false) {
+        throw response;
+      }
+      displayAlert(response.message || 'NAT规则删除成功', 'success');
+      fetchData(ApiService.getAllNatRules, setNatRules, '刷新NAT规则列表...');
+    } catch (err) {
+      displayAlert(err.detail || err.message || '删除NAT规则失败');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResyncNatRules = async () => {
+    if (!apiKey) {
+      displayAlert('请输入 API 密钥');
+      return;
+    }
+    if (!window.confirm(`确定要重新同步所有NAT规则吗？这将清除当前iptables中由本服务管理的规则，并根据数据库重新应用它们。`)) {
+      return;
+    }
+    setIsLoading(true);
+    try {
+      const response = await ApiService.resyncNatRules(apiKey);
+       if (response.success === false) {
+        throw response;
+      }
+      displayAlert(response.message || 'NAT规则重新同步操作已发送。', 'success');
+      fetchData(ApiService.getAllNatRules, setNatRules, '刷新NAT规则列表...');
+    } catch (err) {
+      displayAlert(err.detail || err.message || '重新同步NAT规则失败');
+    } finally {
+      setIsLoading(false);
+    }
   };
   
   const renderAlerts = () => (
@@ -352,7 +514,7 @@ function App() {
       <div className="d-flex flex-wrap justify-content-between align-items-center mb-3">
         <h2 className="mb-2 mb-md-0"><i className="bi bi-box"></i> 容器列表 {selectedNode && `(节点: ${selectedNode})`}</h2>
         <div>
-          {selectedNode && <button className="btn btn-outline-secondary me-2 mb-2 mb-md-0" onClick={() => {setSelectedNode(''); fetchNodeDetails(''); }}>查看所有节点容器</button>}
+          {selectedNode && <button className="btn btn-outline-secondary me-2 mb-2 mb-md-0" onClick={() => {setSelectedNode(''); }}>查看所有节点容器</button>}
           <button className="btn btn-primary mb-2 mb-md-0" onClick={openCreateContainerModal} disabled={!apiKey || nodes.length === 0}><i className="bi bi-plus-circle"></i> 创建容器</button>
         </div>
       </div>
@@ -596,6 +758,126 @@ function App() {
     </div>
   );
 
+const renderNatManagement = () => (
+    <div>
+      <div className="d-flex justify-content-between align-items-center mb-3">
+        <h2><i className="bi bi-diagram-3"></i> NAT 规则管理</h2>
+        <div>
+          <button className="btn btn-warning me-2" onClick={handleResyncNatRules} disabled={!apiKey || isLoading}><i className="bi bi-arrow-repeat"></i> 重新同步所有规则</button>
+          <button className="btn btn-primary" onClick={openCreateNatRuleModal} disabled={!apiKey || isLoading}><i className="bi bi-plus-circle"></i> 添加新规则</button>
+        </div>
+      </div>
+      {!apiKey && <p className="alert alert-warning">请输入API密钥以管理NAT规则。</p>}
+      {apiKey && natRules.length > 0 ? (
+        <div className="table-responsive">
+          <table className="table table-striped table-hover">
+            <thead>
+              <tr>
+                <th>ID</th><th>节点</th><th>VMID</th><th>主机端口</th><th>容器端口</th><th>协议</th><th>容器IP(创建时)</th><th>描述</th><th>状态</th><th>创建时间</th><th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {natRules.map(rule => (
+                <tr key={rule.id}>
+                  <td>{rule.id}</td>
+                  <td>{rule.node}</td>
+                  <td>{rule.vmid}</td>
+                  <td>{rule.host_port}</td>
+                  <td>{rule.container_port}</td>
+                  <td>{rule.protocol}</td>
+                  <td>{rule.container_ip_at_creation}</td>
+                  <td>{rule.description}</td>
+                  <td><span className={`badge bg-${rule.enabled ? 'success' : 'danger'}`}>{rule.enabled ? '启用' : '禁用'}</span></td>
+                  <td>{new Date(rule.created_at).toLocaleString()}</td>
+                  <td>
+                    <button className="btn btn-sm btn-outline-primary me-1" title="编辑" onClick={() => openEditNatRuleModal(rule)}><i className="bi bi-pencil-square"></i></button>
+                    <button className="btn btn-sm btn-outline-danger" title="删除" onClick={() => handleDeleteNatRule(rule.id)}><i className="bi bi-trash"></i></button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : apiKey && !isLoading && <p>没有找到 NAT 规则。</p>}
+    </div>
+  );
+
+const renderNatRuleModal = () => (
+    <div className={`modal fade ${showNatRuleModal ? 'show d-block' : ''}`} tabIndex="-1" style={{backgroundColor: showNatRuleModal ? 'rgba(0,0,0,0.5)' : 'transparent'}}>
+      <div className="modal-dialog modal-lg">
+        <div className="modal-content">
+          <form onSubmit={handleCreateOrUpdateNatRule}>
+            <div className="modal-header">
+              <h5 className="modal-title">{isEditNatRuleMode ? `编辑 NAT 规则 (ID: ${currentNatRuleId})` : '创建新 NAT 规则'}</h5>
+              <button type="button" className="btn-close" onClick={() => setShowNatRuleModal(false)}></button>
+            </div>
+            <div className="modal-body">
+              {!isEditNatRuleMode && (
+                <>
+                  <div className="mb-3">
+                    <label htmlFor="nat_node" className="form-label">目标节点*</label>
+                    <select className="form-select" id="nat_node" name="node" value={natRuleFormData.node} onChange={handleNatRuleFormChange} required disabled={nodes.length === 0}>
+                      <option value="" disabled>选择一个节点</option>
+                      {nodes.map(n => <option key={n.node} value={n.node}>{n.node}</option>)}
+                    </select>
+                  </div>
+                  <div className="mb-3">
+                    <label htmlFor="nat_vmid" className="form-label">LXC容器 VMID*</label>
+                    <input type="number" className="form-control" id="nat_vmid" name="vmid" value={natRuleFormData.vmid} onChange={handleNatRuleFormChange} required />
+                  </div>
+                </>
+              )}
+              {isEditNatRuleMode && (
+                 <>
+                  <div className="mb-3">
+                    <label className="form-label">目标节点</label>
+                    <input type="text" className="form-control" value={natRuleFormData.node} readOnly disabled />
+                  </div>
+                  <div className="mb-3">
+                    <label className="form-label">LXC容器 VMID</label>
+                    <input type="number" className="form-control" value={natRuleFormData.vmid} readOnly disabled />
+                  </div>
+                 </>
+              )}
+              <div className="row">
+                <div className="col-md-6 mb-3">
+                  <label htmlFor="nat_host_port" className="form-label">主机端口*</label>
+                  <input type="number" className="form-control" id="nat_host_port" name="host_port" value={natRuleFormData.host_port} onChange={handleNatRuleFormChange} required min="1" max="65535"/>
+                </div>
+                <div className="col-md-6 mb-3">
+                  <label htmlFor="nat_container_port" className="form-label">容器端口*</label>
+                  <input type="number" className="form-control" id="nat_container_port" name="container_port" value={natRuleFormData.container_port} onChange={handleNatRuleFormChange} required min="1" max="65535"/>
+                </div>
+              </div>
+              <div className="mb-3">
+                <label htmlFor="nat_protocol" className="form-label">协议*</label>
+                <select className="form-select" id="nat_protocol" name="protocol" value={natRuleFormData.protocol} onChange={handleNatRuleFormChange} required>
+                  <option value="tcp">TCP</option>
+                  <option value="udp">UDP</option>
+                </select>
+              </div>
+              <div className="mb-3">
+                <label htmlFor="nat_description" className="form-label">描述</label>
+                <input type="text" className="form-control" id="nat_description" name="description" value={natRuleFormData.description} onChange={handleNatRuleFormChange} />
+              </div>
+              {isEditNatRuleMode && (
+                <div className="form-check mb-3">
+                  <input className="form-check-input" type="checkbox" id="nat_enabled" name="enabled" checked={natRuleFormData.enabled} onChange={handleNatRuleFormChange} />
+                  <label className="form-check-label" htmlFor="nat_enabled">启用规则</label>
+                </div>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn btn-secondary" onClick={() => setShowNatRuleModal(false)}>关闭</button>
+              <button type="submit" className="btn btn-primary" disabled={isLoading || !apiKey}>{isLoading ? '处理中...' : (isEditNatRuleMode ? '确认更新' : '确认创建')}</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+
+
   return (
     <div className="container-fluid mt-3">
       <header className="d-flex flex-wrap align-items-center justify-content-center justify-content-md-between py-3 mb-4 border-bottom">
@@ -623,6 +905,9 @@ function App() {
         <li className="nav-item">
           <button className={`nav-link ${currentView === 'containers' ? 'active' : ''}`} onClick={() => setCurrentView('containers')}>容器管理</button>
         </li>
+         <li className="nav-item">
+          <button className={`nav-link ${currentView === 'natManagement' ? 'active' : ''}`} onClick={() => setCurrentView('natManagement')}>NAT管理</button>
+        </li>
         <li className="nav-item">
           <button className={`nav-link ${currentView === 'tasks' ? 'active' : ''}`} onClick={() => setCurrentView('tasks')}>任务状态</button>
         </li>
@@ -630,10 +915,13 @@ function App() {
 
       {currentView === 'nodes' && renderNodes()}
       {currentView === 'containers' && renderContainers()}
+      {currentView === 'natManagement' && renderNatManagement()}
       {currentView === 'tasks' && renderTasks()}
       
       {showContainerModal && renderContainerModal()}
       {showConsoleModal && renderConsoleModal()}
+      {showNatRuleModal && renderNatRuleModal()}
+
 
       <footer className="pt-3 mt-4 text-muted border-top">
         <div className="container text-center">
