@@ -25,7 +25,7 @@ const initialContainerFormData = {
   unprivileged: true,
   start: false,
   features: '',
-  console_mode: '默认 (tty)',
+  console_mode: 'tty',
 };
 
 const initialNatRuleFormData = {
@@ -234,7 +234,7 @@ function App() {
     setContainerFormData(initialContainerFormData);
     if (nodes.length > 0) {
         const defaultNode = nodes[0].node;
-        setContainerFormData(prev => ({...prev, node: defaultNode}));
+        setContainerFormData(prev => ({...prev, node: defaultNode, console_mode: 'tty'}));
         fetchNodeDetails(defaultNode);
     } else {
         displayAlert('没有可用的节点信息，请先确保节点列表已加载。');
@@ -264,7 +264,7 @@ function App() {
       cores: ct.maxcpu || 1,
       cpulimit: null,
       memory: Math.round((ct.maxmem || 536870912) / (1024 * 1024)),
-      swap: Math.round((ct.maxswap || 536870912) / (1024 * 1024)), // Assuming maxswap exists or default
+      swap: Math.round((ct.maxswap || 536870912) / (1024 * 1024)),
       network: {
         name: 'eth0',
         bridge: 'vmbr0',
@@ -277,7 +277,7 @@ function App() {
       unprivileged: true,
       start: false,
       features: '',
-      console_mode: '默认 (tty)',
+      console_mode: 'tty',
     });
     setShowContainerModal(true);
   };
@@ -695,7 +695,7 @@ function App() {
                 <div className="col-md-6 mb-3">
                     <label htmlFor="console_mode" className="form-label">控制台模式</label>
                     <select className="form-select" id="console_mode" name="console_mode" value={containerFormData.console_mode} onChange={handleContainerFormChange}>
-                        <option value="默认 (tty)">默认 (tty)</option>
+                        <option value="tty">默认 (tty)</option>
                         <option value="shell">Shell</option>
                     </select>
                 </div>
