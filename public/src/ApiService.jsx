@@ -24,7 +24,7 @@ const request = async (endpoint, method = 'GET', body = null, apiKey = '') => {
       try {
         errorData = await response.json();
       } catch (e) {
-        errorData = { message: `HTTP 错误: ${response.status} ${response.statusText}` };
+        errorData = { message: `HTTP 请求错误: ${response.status} ${response.statusText}` };
       }
       throw errorData;
     }
