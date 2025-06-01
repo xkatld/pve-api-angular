@@ -68,7 +68,7 @@ def _apply_iptables_rule(rule: models.NatRule, add: bool = True) -> Tuple[bool, 
         base_comment_part = f"pve-lxc-server:id={rule.id};node={rule.node};vmid={rule.vmid}"
         if len(base_comment_part) <=255:
             generated_comment = base_comment_part
-        else: # Should not happen if IDs/node/vmid names are reasonable
+        else: 
             generated_comment = base_comment_part[:252] + "..."
 
 
@@ -177,7 +177,7 @@ def update_nat_rule(db: Session, rule_id: int, rule_update: schemas.NatRuleUpdat
     old_enabled_state = db_rule.enabled
     old_container_ip = db_rule.container_ip_at_creation
     old_container_port = db_rule.container_port
-    old_description = db_rule.description # For constructing old comment
+    old_description = db_rule.description 
 
     update_data = rule_update.model_dump(exclude_unset=True)
     
@@ -195,7 +195,6 @@ def update_nat_rule(db: Session, rule_id: int, rule_update: schemas.NatRuleUpdat
     
     new_enabled_state = update_data.get('enabled', db_rule.enabled)
 
-    # Create a temporary NatRule object representing the rule *as it was in iptables* for accurate deletion
     temp_old_rule_for_iptables = models.NatRule(
         id=db_rule.id, host_port=old_host_port, protocol=old_protocol, 
         container_ip_at_creation=old_container_ip, container_port=old_container_port,
@@ -214,7 +213,7 @@ def update_nat_rule(db: Session, rule_id: int, rule_update: schemas.NatRuleUpdat
     for key, value in update_data.items():
         if key == "protocol" and value is not None:
             setattr(db_rule, key, value.lower())
-        elif value is not None: # Also handles 'enabled' if present in update_data
+        elif value is not None: 
             setattr(db_rule, key, value)
     
     try:
@@ -231,7 +230,6 @@ def update_nat_rule(db: Session, rule_id: int, rule_update: schemas.NatRuleUpdat
     iptables_add_msg = ""
     if new_enabled_state and (changed_networking_params or (not old_enabled_state and new_enabled_state)):
         
-        # If critical network params changed or rule is being re-enabled, ensure IP is fresh
         if db_rule.enabled: 
             container_ip = proxmox_service.get_container_ip(db_rule.node, db_rule.vmid)
             if not container_ip:
@@ -243,11 +241,11 @@ def update_nat_rule(db: Session, rule_id: int, rule_update: schemas.NatRuleUpdat
             if db_rule.container_ip_at_creation != container_ip:
                  logger.info(f"容器 {db_rule.node}/{db_rule.vmid} IP 从 {db_rule.container_ip_at_creation} 变为 {container_ip}。更新规则 (ID: {db_rule.id}) 中记录的IP。")
                  db_rule.container_ip_at_creation = container_ip
-                 db.commit() # Commit IP change before applying rule
+                 db.commit() 
                  db.refresh(db_rule)
 
 
-        iptables_add_success, iptables_add_msg = _apply_iptables_rule(db_rule, add=True) # db_rule now has potentially updated IP
+        iptables_add_success, iptables_add_msg = _apply_iptables_rule(db_rule, add=True) 
         if not iptables_add_success:
             logger.error(f"更新规则 (ID: {db_rule.id}) 时，新iptables规则添加失败: {iptables_add_msg}")
             db_rule.enabled = False 
@@ -258,7 +256,7 @@ def update_nat_rule(db: Session, rule_id: int, rule_update: schemas.NatRuleUpdat
     final_message = f"NAT 规则 (ID: {db_rule.id}) 已成功更新。"
     if not iptables_delete_success:
         final_message += f" 注意：旧iptables规则删除可能失败: {iptables_delete_msg}。"
-    if db_rule.enabled and not iptables_add_success and (changed_networking_params or (not old_enabled_state and new_enabled_state)): # Only mention add failure if it was attempted
+    if db_rule.enabled and not iptables_add_success and (changed_networking_params or (not old_enabled_state and new_enabled_state)): 
          final_message += f" 注意：新iptables规则应用失败，规则已被禁用: {iptables_add_msg}。"
             
     return db_rule, final_message
@@ -269,7 +267,7 @@ def delete_nat_rule(db: Session, rule_id: int) -> Tuple[bool, str]:
     if not db_rule:
         return False, "未找到指定的 NAT 规则。"
 
-    iptables_success = True # Assume success if rule is not enabled
+    iptables_success = True 
     iptables_msg = "规则未启用，无需操作iptables。"
 
     if db_rule.enabled:
@@ -293,46 +291,17 @@ def delete_nat_rule(db: Session, rule_id: int) -> Tuple[bool, str]:
     return True, msg
 
 def resync_all_iptables_rules(db: Session) -> Tuple[bool, str, Dict[str, Any]]:
-    logger.info("开始重新同步所有NAT规则到iptables...")
-    
-    comment_prefix_to_clear = "pve-lxc-server:" # This must match what _apply_iptables_rule generates
-    clear_cmd_parts = [
-        IPTABLES_COMMAND, '-t', 'nat', '-S', 'PREROUTING'
-    ]
-    list_success, current_rules_str = _run_command(clear_cmd_parts)
-    if not list_success:
-        return False, f"无法列出现有PREROUTING规则: {current_rules_str}", {}
+    logger.warning("警告：即将执行 iptables -t nat -F PREROUTING 命令，这将清除 nat 表 PREROUTING 链中的所有现有规则。请确保这是期望的操作，并且不会影响其他服务。")
+    logger.info("开始通过清空PREROUTING链并重新应用数据库规则来同步iptables...")
 
-    delete_commands = []
-    for line in current_rules_str.splitlines():
-        # Ensure we are matching rules added by this service based on the comment
-        # The comment format is "pve-lxc-server:id=..."
-        if f'-m comment --comment "{comment_prefix_to_clear}' in line and line.startswith("-A PREROUTING"):
-            delete_cmd_str = line.replace("-A PREROUTING", "-D PREROUTING", 1)
-            # shlex.split needs careful handling if parts of the rule can be complex.
-            # For standard iptables -S output, this should generally be okay.
-            try:
-                delete_cmd_parts = [IPTABLES_COMMAND, '-t', 'nat'] + shlex.split(delete_cmd_str)
-                delete_commands.append(delete_cmd_parts)
-            except ValueError as e:
-                logger.error(f"解析规则行失败: {line} - 错误: {e}")
-                continue
+    flush_cmd_parts = [IPTABLES_COMMAND, '-t', 'nat', '-F', 'PREROUTING']
+    flush_success, flush_output = _run_command(flush_cmd_parts)
 
+    if not flush_success:
+        logger.error(f"清空 PREROUTING 链失败: {flush_output}")
+        return False, f"关键错误：无法清空 nat 表 PREROUTING 链: {flush_output}。同步中止。", {}
 
-    cleared_count = 0
-    failed_clear_count = 0
-    # Delete in reverse order of how -S lists them (usually not critical, but safer)
-    # Or delete in reverse order of typical addition (if that was tracked, but it's not)
-    # For -D, order doesn't strictly matter as long as the rule matches exactly.
-    for cmd in delete_commands: 
-        del_success, del_out = _run_command(cmd)
-        if del_success:
-            cleared_count += 1
-        else:
-            failed_clear_count += 1
-            logger.warning(f"重新同步时，删除旧iptables规则失败: {' '.join(cmd)} - {del_out}")
-    
-    logger.info(f"重新同步：清除了 {cleared_count} 条旧规则，{failed_clear_count} 条删除失败。")
+    logger.info("成功清空 nat 表 PREROUTING 链。")
 
     db_rules = db.query(models.NatRule).filter(models.NatRule.enabled == True).all()
     applied_count = 0
@@ -343,49 +312,45 @@ def resync_all_iptables_rules(db: Session) -> Tuple[bool, str, Dict[str, Any]]:
         container_ip = proxmox_service.get_container_ip(db_rule.node, db_rule.vmid)
         if not container_ip:
             logger.warning(f"重新同步：无法获取容器 {db_rule.node}/{db_rule.vmid} 的IP地址，跳过规则 ID {db_rule.id} 并将其在数据库中禁用。")
-            db_rule.enabled = False # Mark for update in DB
+            db_rule.enabled = False
             rules_disabled_due_to_error.append(db_rule.id)
             continue 
         
         if db_rule.container_ip_at_creation != container_ip:
             logger.info(f"重新同步：容器 {db_rule.node}/{db_rule.vmid} 的IP地址已从 {db_rule.container_ip_at_creation} 变更为 {container_ip}。更新规则 ID {db_rule.id} 中记录的IP。")
-            db_rule.container_ip_at_creation = container_ip # Mark for update in DB
+            db_rule.container_ip_at_creation = container_ip
         
-        iptables_success, _ = _apply_iptables_rule(db_rule, add=True)
-        if iptables_success:
+        iptables_success_apply, _ = _apply_iptables_rule(db_rule, add=True)
+        if iptables_success_apply:
             applied_count += 1
         else:
             failed_apply_count += 1
             logger.error(f"重新同步：应用规则 ID {db_rule.id} 失败，将在数据库中禁用。")
-            db_rule.enabled = False # Mark for update in DB
+            db_rule.enabled = False 
             rules_disabled_due_to_error.append(db_rule.id)
     
     try:
-        db.commit() # Commit all changes (enabled status, IP updates)
+        db.commit() 
     except Exception as e:
         db.rollback()
         logger.error(f"重新同步期间提交数据库更改失败: {e}")
-        # Construct stats before returning to reflect attempted operations
         stats_on_error = {
-            "cleared_rules": cleared_count,
-            "failed_to_clear_rules": failed_clear_count,
-            "attempted_to_apply_rules": len(db_rules), # Number of rules iterated for application
-            "successfully_applied_rules": applied_count,
+            "cleared_rules_via_flush": "all_in_prerouting_nat",
+            "applied_rules": applied_count,
             "failed_to_apply_rules": failed_apply_count,
-            "rules_marked_for_disable_ids": list(set(rules_disabled_due_to_error))
+            "rules_disabled_due_to_error_ids": list(set(rules_disabled_due_to_error))
         }
-        return False, f"重新同步部分成功，但最终数据库更新失败: {e}", stats_on_error
+        return False, f"PREROUTING 链已清空，但后续数据库更新或规则应用失败: {e}", stats_on_error
         
     stats = {
-        "cleared_rules": cleared_count,
-        "failed_to_clear_rules": failed_clear_count,
+        "cleared_rules_via_flush": "all_in_prerouting_nat", 
         "applied_rules": applied_count,
         "failed_to_apply_rules": failed_apply_count,
         "rules_disabled_due_to_error_ids": list(set(rules_disabled_due_to_error))
     }
     
     message = (
-        f"重新同步完成。清除了 {cleared_count} 条旧规则 ({failed_clear_count}条失败)。"
+        f"重新同步完成。PREROUTING 链已清空。"
         f"应用了 {applied_count} 条新规则 ({failed_apply_count}条失败)。"
         f"{len(stats['rules_disabled_due_to_error_ids'])} 条规则因错误被禁用。"
     )
